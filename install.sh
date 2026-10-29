@@ -59,7 +59,7 @@ PLIST
       launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true; rm -f "$plist"
       echo "okay-mlx no longer starts by itself" ;;
     status)
-      launchctl print "gui/$(id -u)/$label" 2>/dev/null | grep -E "^\s*(state|pid) =" || echo "not installed"
+      launchctl print "gui/$(id -u)/$label" 2>/dev/null | grep -E "^\s*(state|pid) =" | head -2 || echo "not installed"
       grep -E "loaded:|closed:" "$log" 2>/dev/null | tail -1 ;;
     *) echo "okay-mlx service install [model] [port] | uninstall | status"; exit 1 ;;
   esac
