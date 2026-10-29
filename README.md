@@ -1,11 +1,14 @@
 # okay-mlx
 
 [okay-llm](https://github.com/okay-effects/okay-llm)'s model on Apple's MLX: [mlx-scala](https://github.com/sergey-scherbina/mlx-scala)
-as an `Llm.Backend` — the conversation through the model's own chat template, greedy — and the app on it: a question,
+as an `Llm.Backend` — the conversation through the model's own chat template, sampled as the request asks (greedy by
+default), its prefix cached in memory and on disk — and the app on it: a question,
 a benchmark, the gateway (OpenAI's and Anthropic's APIs). The JVM (FFM) and Scala Native.
 
 ```
-../mlx-scala/native-lib/build.sh && (cd ../mlx-scala && sbt publishLocal) && (cd ../okay-llm && sbt publishLocal)
+curl -LO https://github.com/sergey-scherbina/mlx-scala/releases/download/v0.1.0/mlx-scala-native-0.1.0-macos-arm64.tar.gz
+mkdir -p mlx-lib && tar xzf mlx-scala-native-0.1.0-macos-arm64.tar.gz -C mlx-lib   # or ../mlx-scala/native-lib/build.sh
+export MLX_SCALA_LIB=$PWD/mlx-lib                                                  # the directory with libokm.dylib
 sbt "appJVM/run ask What is a KV cache?"
 MLX_MODEL=mlx-community/Qwen3.6-35B-A3B-4bit sbt "appNative/run serve 8090"
 ANTHROPIC_BASE_URL=http://127.0.0.1:8090 ANTHROPIC_API_KEY=local claude -p "Create hello.txt with the word okay"
@@ -15,10 +18,24 @@ The model: `MLX_MODEL`, a HuggingFace repository in the cache — Qwen3 (`mlx-co
 Qwen3.5, Qwen3.6 (`mlx-community/Qwen3.6-35B-A3B-4bit`).
 
 ```scala
-val backend = MlxBackend(repo, Model.load(dir), Chat.load(dir))
-Server.run(8090)((req, out) => run(Log.to(stderr)(Fresh.from(0)(Clock.system(Http.socket(out)(
+val backend = MlxBackend.open(repo, dir)   // the model on a thread of its own
+Server.run(8090)((req, out) => run(Log.to(stderr, Level.Info)(Fresh.from(0)(Clock.system(Http.socket(out)(
   Llm.on(backend)(Gateway.route[Gw](req))))))))
 ```
+
+## Get it
+
+```scala
+resolvers ++= Seq("okay-mlx" at "https://okay-effects.github.io/okay-mlx/maven",
+  "mlx-scala" at "https://sergey-scherbina.github.io/mlx-scala/maven",
+  "okay-llm" at "https://okay-effects.github.io/okay-llm/maven",
+  "okay-scala" at "https://okay-effects.github.io/okay-scala/maven",
+  "okay-simple" at "https://okay-effects.github.io/okay-simple/maven")
+libraryDependencies += "io.github.okay-effects" %%% "okay-mlx" % "0.1.0"
+```
+
+The native libraries as mlx-scala's [release](https://github.com/sergey-scherbina/mlx-scala/releases/tag/v0.1.0) has
+them, `MLX_SCALA_LIB` their directory.
 
 ## Measured
 
