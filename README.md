@@ -34,5 +34,10 @@ Qwen3.6-35B-A3B (4-bit), greedy, 256 tokens out, the median of 3 runs, tokens a 
 For scale, the same model on the same machine (2026-10-28, through their HTTP APIs, a ~10k-token prompt): rozum
 1171–1193 / 92, LM Studio 1259–1268 / 101.
 
+Prompts' prefixes are kept across requests (mlx-scala's `PrefixCache`): an agent's next turn computes only what is
+new. Claude Code, Qwen3.6-35B-A3B, a task of three turns: the first 13.5k tokens' prefill 16.3 s; the next two
+13.7k each, 13.5k of them cached — 0.27 s and 0.21 s; the task 26 s instead of 50–57. `OKAY_MLX_DUMP=<dir>` writes
+each rendered prompt there: where two turns' prompts part is where a cache misses.
+
 Claude Code ran against the gateway on Scala Native with it: a 13.6k-token prompt with its tools; the model called
 `Write` and made the file.
