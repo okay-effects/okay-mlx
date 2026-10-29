@@ -34,6 +34,12 @@ Qwen3.6-35B-A3B (4-bit), greedy, 256 tokens out, the median of 3 runs, tokens a 
 For scale, the same model on the same machine (2026-10-28, through their HTTP APIs, a ~10k-token prompt): rozum
 1171–1193 / 92, LM Studio 1259–1268 / 101.
 
+Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
+token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
+`top_p`, `top_k`, `seed`), else as the model's generation_config.json does. A prompt's first mark is kept on disk
+too (`OKAY_MLX_PREFIXES`, `off` for memory alone; ~/.cache/okay-mlx/prefixes): after a restart Claude Code's first
+request took 9k of its 13.5k tokens from there, prefill 6 s instead of 20; the task 13 s.
+
 Prompts' prefixes are kept across requests (mlx-scala's `PrefixCache`): an agent's next turn computes only what is
 new. Claude Code, Qwen3.6-35B-A3B, a task of three turns: the first 13.5k tokens' prefill 16.3 s; the next two
 13.7k each, 13.5k of them cached — 0.27 s and 0.21 s; the task 26 s instead of 50–57. `OKAY_MLX_DUMP=<dir>` writes

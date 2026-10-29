@@ -4,7 +4,7 @@ import java.nio.file.Path
 import okay.scala3.*
 import okay.scala3.std.*
 import okay.llm.*
-import mlx.llm.{Chat, Model, Models}
+import mlx.llm.Models
 
 /** okay-llm on MLX: `ask <question>` — one answer; `bench [runs] [source file]` — prefill and decode speed at three
  * prompt sizes; `serve [port]` — the gateway (OpenAI's and Anthropic's APIs, 127.0.0.1:8090). The model: MLX_MODEL
@@ -15,7 +15,7 @@ import mlx.llm.{Chat, Model, Models}
   val stderr = (l: Level, m: String) => System.err.println(s"[$l] $m")
   val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
   stderr(Level.Info, s"$repo at $dir")
-  val backend = MlxBackend(repo, Model.load(dir), Chat.load(dir))
+  val backend = MlxBackend.open(repo, dir)
 
   type App[X] = (Llm + Console + Clock + Log)[X]
   def go[A](p: A ! App): A = run(Log.to(stderr, Level.Info)(Clock.system(Console.stdout(Llm.on(backend)(p)))))
