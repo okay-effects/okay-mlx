@@ -76,6 +76,11 @@ the old one freed first (19.5 GB back after Qwen3.6-35B), a switch waiting for t
 (one not asked for a token in a minute, its client gone, closed). Any other name — Claude Code's `claude-…`,
 rozum's `claude-rozum-…` for its small requests — is answered by the one loaded, so never switches it.
 
+The weights are mapped (mlx-scala's `SafeTensors`; `OKAY_MLX_MMAP=0` reads them): a model loads in a fraction of a
+second, and its pages are the file's — the gateway's process holds under 1 GB of its own with Qwen3.6-35B loaded,
+the OS free to take pages back when memory is short. Once per model, an aligned copy of its files is written
+(~/.cache/mlx-scala/aligned; Qwen3.6-35B: 19 GB, ~35 s).
+
 Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
 token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
 `top_p`, `top_k`, `seed`, `presence_penalty`, `frequency_penalty`), else as the model's generation_config.json

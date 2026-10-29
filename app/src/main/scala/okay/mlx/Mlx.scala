@@ -58,7 +58,8 @@ object MlxBackend:
    * penalties' variables, ~/.config/okay-mlx/models.json (for clients that send none: Anthropic's API has none) */
   def open(name: String, dir: Path, mlx: OnThread = OnThread.shared): MlxBackend =
     mlx {
-      val model = Model.load(dir)
+      // the weights mapped (mlx-scala's SafeTensors): loaded at once, the pages the file's — OKAY_MLX_MMAP=0 reads them
+      val model = Model.load(dir, mapped = !sys.env.get("OKAY_MLX_MMAP").contains("0"))
       val root = sys.env.get("OKAY_MLX_PREFIXES") match
         case Some("off") => None
         case Some(p) => Some(Path.of(p))
