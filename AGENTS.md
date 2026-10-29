@@ -1,15 +1,10 @@
 # okay-mlx — notes for agents
 
-Language models on mlx-scala with okay-scala's effects; JVM (FFM) and Scala Native. One crossProject, `app/`,
-package `okay.mlx`.
+okay-llm's MLX module: `MlxBackend` (an `Llm.Backend` on mlx-scala's `Model`, `Chat`, `Session`; okay-llm's JSON
+converted to mlx-scala's), and `Main` (ask, bench, serve). One crossProject `app/`, package `okay.mlx`.
 
-- Depends on mlx-scala `0.1.0-SNAPSHOT` by `publishLocal` (../mlx-scala) and on its native libraries:
-  `MLX_SCALA_LIB`, else `../mlx-scala/native-lib/out/lib`. okay-scala 0.1.1 from its Pages repository.
-- `Effects.scala`: `Llm` (mlx, fake), `Files`, `Console`, `Http` (socket, collect); `Ask`, `Gen`, `Finished`,
-  `Request`. `Api.scala`: pure — `Streamer` (thinking / text / held-back tool calls, a tag's beginning waits),
-  `OpenAi`, `Anthropic` (requests as `Ask`, turns as JSON or stream chunks). `Gateway.scala`: the routes as
-  programs. `Server.scala`: HTTP/1.1 on ServerSocket. `Programs.scala`: ask, bench. `Main.scala`: wiring.
-- Every program is tested under fake/collect/virtual handlers (`GatewaySuite`, `ProgramsSuite`) on both platforms.
-- Scala Native's regex is RE2's: no look-around. No `java.time`.
+- Depends on mlx-scala and okay-llm `0.1.0-SNAPSHOT` by `publishLocal`, and on mlx-scala's native libraries:
+  `MLX_SCALA_LIB`, else `../mlx-scala/native-lib/out/lib`. Native builds embed resources (mlx-scala's NFC data).
+- The effects, the gateway, the server, the programs are okay-llm's; nothing here but the hardware and the wiring.
 
-Build: `sbt test`, `sbt "appJVM/run serve 8090"`, `sbt "appNative/run bench 3"`. Lines at most 120 characters.
+Build: `sbt test` (the backend on Qwen3-4B, skipped without it), `sbt "appNative/run serve 8090"`. Lines at most 120.

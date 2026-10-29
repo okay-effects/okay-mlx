@@ -1,5 +1,5 @@
-// okay-mlx: language models on Apple's MLX (mlx-scala) with okay-scala's effects — the world reached through effects
-// (the model, files, the console, the clock, the log), answered by handlers: real ones, and ones for tests
+// okay-mlx: okay-llm's model on Apple's MLX — mlx-scala as an `Llm.Backend`; and the app: ask, bench, serve (the
+// gateway). okay-llm has the effects, the gateway, the server; this module the hardware
 import sbtcrossproject.CrossPlugin.autoImport.{crossProject, CrossType}
 import scala.scalanative.build.*
 
@@ -28,7 +28,7 @@ val nativeLinking = Seq(
 lazy val app = crossProject(JVMPlatform, NativePlatform).crossType(CrossType.Pure).in(file("app"))
   .settings(name := "okay-mlx",
     libraryDependencies ++= Seq("io.github.sergey-scherbina" %%% "mlx-scala-llm" % mlxScala,
-      "io.github.okay-effects" %%% "okay-scala" % "0.1.1", "org.scalameta" %%% "munit" % "1.2.3" % Test))
+      "io.github.okay-effects" %%% "okay-llm" % "0.1.0-SNAPSHOT", "org.scalameta" %%% "munit" % "1.2.3" % Test))
   .jvmSettings(jvmNative)
   .nativeSettings(nativeLinking)
 
