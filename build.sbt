@@ -5,7 +5,7 @@ import scala.scalanative.build.*
 
 ThisBuild / scalaVersion := "3.3.8"
 ThisBuild / organization := "io.github.okay-effects"
-ThisBuild / version := "0.1.1-SNAPSHOT"
+ThisBuild / version := "0.1.0"
 ThisBuild / scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Wunused:imports,privates,locals")
 ThisBuild / resolvers ++= Seq("mlx-scala" at "https://sergey-scherbina.github.io/mlx-scala/maven",
   "okay-llm" at "https://okay-effects.github.io/okay-llm/maven",

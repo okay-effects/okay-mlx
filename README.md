@@ -53,7 +53,9 @@ For scale, the same model on the same machine (2026-10-28, through their HTTP AP
 
 Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
 token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
-`top_p`, `top_k`, `seed`), else as the model's generation_config.json does. A prompt's first mark is kept on disk
+`top_p`, `top_k`, `seed`, `presence_penalty`, `frequency_penalty`), else as the model's generation_config.json
+does; penalties for clients that send none (Anthropic's API has none: Claude Code) by `OKAY_MLX_PRESENCE_PENALTY`,
+`OKAY_MLX_FREQUENCY_PENALTY` — against a sampled loop (Qwen's card: presence 1.5 for general tasks, 0 for code). A prompt's first mark is kept on disk
 too (`OKAY_MLX_PREFIXES`, `off` for memory alone; ~/.cache/okay-mlx/prefixes): after a restart Claude Code's first
 request took 9k of its 13.5k tokens from there, prefill 6 s instead of 20; the task 13 s.
 
