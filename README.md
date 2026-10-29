@@ -23,6 +23,25 @@ Server.run(8090)((req, out) => run(Log.to(stderr, Level.Info)(Fresh.from(0)(Cloc
   Llm.on(backend)(Gateway.route[Gw](req))))))))
 ```
 
+## Install (the gateway, native)
+
+```
+curl -fsSL https://raw.githubusercontent.com/okay-effects/okay-mlx/master/install.sh | sh
+okay-mlx service install mlx-community/Qwen3.6-35B-A3B-4bit    # serves 127.0.0.1:8090 now and with every login
+```
+
+The release's Scala Native binary and MLX's libraries in ~/.okay-mlx (the binary finds them in ../lib), the command
+`okay-mlx` in ~/.local/bin: `ask`, `bench`, `serve [port]`, `service install [model] [port] | uninstall | status`
+(a LaunchAgent; its log ~/.okay-mlx/serve.log). Models from the HuggingFace cache (`hf download …`).
+
+A model's sampling, the owner's: ~/.config/okay-mlx/models.json (or `OKAY_MLX_MODELS`), by model, `"*"` for all —
+over the model's generation_config.json, under a request's own fields; read when a model loads:
+
+```json
+{"*": {"presence_penalty": 1.5},
+ "mlx-community/Qwen3.6-35B-A3B-4bit": {"temperature": 0.6, "top_p": 0.95, "top_k": 20, "presence_penalty": 0}}
+```
+
 ## Get it
 
 ```scala

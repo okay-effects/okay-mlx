@@ -38,7 +38,9 @@ val jvmNative = Seq(
   run / connectInput := true)
 val nativeLinking = Seq(
   nativeConfig ~= (_.withMode(Mode.releaseFast).withLTO(LTO.none).withEmbedResources(true)
-    .withLinkingOptions(Seq(s"-L$nativeLib", "-lmlxc", s"-Wl,-rpath,$nativeLib"))))
+    .withLinkingOptions(Seq(s"-L$nativeLib", "-lmlxc", s"-Wl,-rpath,$nativeLib",
+      // installed (install.sh): the libraries in ../lib beside bin/okay-mlx
+      "-Wl,-rpath,@executable_path/../lib"))))
 
 /** THE APP: generation and its measurement — `sbt "appJVM/run ask <question>"`, `sbt "appNative/run bench 3"` */
 lazy val app = crossProject(JVMPlatform, NativePlatform).crossType(CrossType.Pure).in(file("app"))

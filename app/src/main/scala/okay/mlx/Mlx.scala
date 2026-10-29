@@ -54,8 +54,8 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
 object MlxBackend:
   /** the model of a directory, loaded on the backend's own MLX thread; its prompts' prefixes kept in memory and on
    * disk — under OKAY_MLX_PREFIXES (`off`: memory alone), else ~/.cache/okay-mlx/prefixes — so a restart does not
-   * compute an agent's system prompt again. Sampling as the model's generation_config.json says, its penalties
-   * OKAY_MLX_PRESENCE_PENALTY, OKAY_MLX_FREQUENCY_PENALTY (for clients that send none: Anthropic's API has none) */
+   * compute an agent's system prompt again. Sampling as `Settings` says: the model's generation_config.json, the
+   * penalties' variables, ~/.config/okay-mlx/models.json (for clients that send none: Anthropic's API has none) */
   def open(name: String, dir: Path, mlx: OnThread = OnThread.shared): MlxBackend =
     mlx {
       val model = Model.load(dir)
@@ -64,9 +64,8 @@ object MlxBackend:
         case Some(p) => Some(Path.of(p))
         case None => Some(Path.of(sys.props("user.home"), ".cache", "okay-mlx", "prefixes"))
       val store = root.map(r => PrefixStore.forModel(r, dir, model)).orNull
-      def env(k: String) = sys.env.get(k).flatMap(_.toDoubleOption).getOrElse(0.0)
-      val sampling = Sampling.of(dir).copy(presencePenalty = env("OKAY_MLX_PRESENCE_PENALTY"),
-        frequencyPenalty = env("OKAY_MLX_FREQUENCY_PENALTY"))
+      val sampling = Settings.of(name, Sampling.of(dir))
+      System.err.println(s"[Info] $name samples as $sampling")
       MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx)
     }
 

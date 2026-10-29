@@ -54,3 +54,15 @@ class SwitchingSuite extends munit.FunSuite:
     Iterator.continually(g.next()).takeWhile(_.isDefined).foreach(_ => ())
     g.close()
     assertEquals(scala.concurrent.Await.result(switched.future, scala.concurrent.duration.Duration(2, "min")), b)
+
+/** a model's sampling: its own, the owner's for every model, the owner's for it — in that order */
+class SettingsSuite extends munit.FunSuite:
+  test("the owner's settings over the model's, by model, \"*\" first"):
+    val j = okay.effects.json.Json.fromText("""{"*": {"presence_penalty": 1.5, "top_k": 40},
+      "a/b": {"temperature": 0.6, "presence_penalty": 0}}""")
+    val model = mlx.llm.Sampling(temperature = 1.0, topP = 0.95, topK = 20)
+    assertEquals(Settings.of("a/b", model, Some(j)),
+      mlx.llm.Sampling(temperature = 0.6, topP = 0.95, topK = 40, presencePenalty = 0))
+    assertEquals(Settings.of("c/d", model, Some(j)),
+      mlx.llm.Sampling(temperature = 1.0, topP = 0.95, topK = 40, presencePenalty = 1.5))
+    assertEquals(Settings.of("c/d", model, None), model)
