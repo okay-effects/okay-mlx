@@ -26,6 +26,13 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
 
   def count(ask: Ask): Int = mlx(prompt(ask).length)
 
+  /** the model and its prefixes freed, MLX's buffers given back: the memory free for another model */
+  def close(): Unit = mlx {
+    cache.clear()
+    model.close()
+    _root_.mlx.Mlx.clearCache()
+  }
+
   def start(ask: Ask): Llm.Generation = mlx(new Llm.Generation:
     private val tokens = prompt(ask)
     // a prompt's prefixes kept across requests: an agent's system prompt, tools and the conversation so far
@@ -49,8 +56,7 @@ object MlxBackend:
    * disk — under OKAY_MLX_PREFIXES (`off`: memory alone), else ~/.cache/okay-mlx/prefixes — so a restart does not
    * compute an agent's system prompt again. Sampling as the model's generation_config.json says, its penalties
    * OKAY_MLX_PRESENCE_PENALTY, OKAY_MLX_FREQUENCY_PENALTY (for clients that send none: Anthropic's API has none) */
-  def open(name: String, dir: Path): MlxBackend =
-    val mlx = OnThread()
+  def open(name: String, dir: Path, mlx: OnThread = OnThread.shared): MlxBackend =
     mlx {
       val model = Model.load(dir)
       val root = sys.env.get("OKAY_MLX_PREFIXES") match
@@ -65,6 +71,10 @@ object MlxBackend:
     }
 
   /** a thread all MLX calls run on: `apply(f)` runs `f` there (at once if on it already) and gives its value */
+  object OnThread:
+    /** THE process's: MLX's streams are the thread's that started MLX (mlx-scala keeps them once), so every model
+     * of a process runs on this one */
+    lazy val shared: OnThread = OnThread()
   final class OnThread:
     @volatile private var thread: Thread | Null = null
     private val executor = Executors.newSingleThreadExecutor { r =>

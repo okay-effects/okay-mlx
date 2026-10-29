@@ -8,14 +8,19 @@ import mlx.llm.Models
 
 /** okay-llm on MLX: `ask <question>` — one answer; `bench [runs] [source file]` — prefill and decode speed at three
  * prompt sizes; `serve [port]` — the gateway (OpenAI's and Anthropic's APIs, 127.0.0.1:8090). The model: MLX_MODEL
- * (a HuggingFace repository in the cache), mlx-community/Qwen3-4B-4bit by default */
+ * (a HuggingFace repository in the cache), mlx-community/Qwen3-4B-4bit by default — the gateway's first, a request
+ * naming another (its `model`) loading that one in its place */
 @main def okayMlx(args: String*): Unit =
   val repo = sys.env.getOrElse("MLX_MODEL", "mlx-community/Qwen3-4B-4bit")
   val platform = if System.getProperty("java.vm.name", "").contains("Scala Native") then "native" else "jvm"
   val stderr = (l: Level, m: String) => System.err.println(s"[$l] $m")
-  val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
-  stderr(Level.Info, s"$repo at $dir")
-  val backend = MlxBackend.open(repo, dir)
+  // the gateway: the model a request names loaded in place of the one there (Switching); ask, bench: MLX_MODEL's
+  val backend: Llm.Backend =
+    if args.headOption.contains("serve") then Switching(repo)
+    else
+      val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
+      stderr(Level.Info, s"$repo at $dir")
+      MlxBackend.open(repo, dir)
 
   type App[X] = (Llm + Console + Clock + Log)[X]
   def go[A](p: A ! App): A = run(Log.to(stderr, Level.Info)(Clock.system(Console.stdout(Llm.on(backend)(p)))))

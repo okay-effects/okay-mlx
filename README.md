@@ -51,6 +51,12 @@ Qwen3.6-35B-A3B (4-bit), greedy, 256 tokens out, the median of 3 runs, tokens a 
 For scale, the same model on the same machine (2026-10-28, through their HTTP APIs, a ~10k-token prompt): rozum
 1171–1193 / 92, LM Studio 1259–1268 / 101.
 
+The gateway's model is `MLX_MODEL`'s at first; a request naming another (its `model`: a repository in the cache
+that loads, `/v1/models` lists them, the one loaded first) loads that one in its place — one in memory at a time,
+the old one freed first (19.5 GB back after Qwen3.6-35B), a switch waiting for the old model's generations to end
+(one not asked for a token in a minute, its client gone, closed). Any other name — Claude Code's `claude-…`,
+rozum's `claude-rozum-…` for its small requests — is answered by the one loaded, so never switches it.
+
 Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
 token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
 `top_p`, `top_k`, `seed`, `presence_penalty`, `frequency_penalty`), else as the model's generation_config.json
