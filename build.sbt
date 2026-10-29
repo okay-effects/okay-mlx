@@ -29,7 +29,8 @@ val nativeLinking = Seq(
 lazy val app = crossProject(JVMPlatform, NativePlatform).crossType(CrossType.Pure).in(file("app"))
   .settings(name := "okay-mlx",
     libraryDependencies ++= Seq("io.github.sergey-scherbina" %%% "mlx-scala-llm" % mlxScala,
-      "io.github.okay-effects" %%% "okay-llm" % "0.1.0-SNAPSHOT", "io.github.okay-effects" %%% "okay-effects-json-value" % "0.1.1",
+      "io.github.okay-effects" %%% "okay-llm" % "0.1.0-SNAPSHOT",
+      "io.github.okay-effects" %%% "okay-effects-json-value" % "0.1.1",
       "org.scalameta" %%% "munit" % "1.2.3" % Test))
   .jvmSettings(jvmNative)
   .nativeSettings(nativeLinking)
