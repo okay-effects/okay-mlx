@@ -23,13 +23,16 @@ Server.run(8090)((req, out) => run(Log.to(stderr)(Fresh.from(0)(Clock.system(Htt
 ## Measured
 
 Qwen3.6-35B-A3B (4-bit), greedy, 256 tokens out, the median of 3 runs, tokens a second (prefill / decode), M4 Max,
-2026-10-29:
+2026-10-29 (mlx-scala 11f1b0f: mlx_lm's packed delta-rule kernel):
 
 | prompt | JVM | Scala Native |
 |---|---|---|
-| 145 tokens | 936 / 98 | 945 / 97 |
-| 5k | 1390 / 95 | 1284 / 91 |
-| 9.9k | 905 / 87 | 820 / 86 |
+| 145 tokens | 946 / 100 | 966 / 98 |
+| 5k | 1449 / 96 | 1511 / 94 |
+| 9.9k | 1299 / 87 | 1246 / 89 |
+
+For scale, the same model on the same machine (2026-10-28, through their HTTP APIs, a ~10k-token prompt): rozum
+1171–1193 / 92, LM Studio 1259–1268 / 101.
 
 Claude Code ran against the gateway on Scala Native with it: a 13.6k-token prompt with its tools; the model called
 `Write` and made the file.
