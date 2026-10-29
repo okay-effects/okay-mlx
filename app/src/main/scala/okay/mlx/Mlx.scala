@@ -1,6 +1,8 @@
 package okay.mlx
 
-import okay.llm.{Ask, Json, Llm, Timing}
+import scala.collection.immutable.VectorMap
+import okay.effects.json.Json
+import okay.llm.{Ask, Llm, Timing}
 import mlx.llm.{Chat, Model, Session}
 
 /** okay-llm's model on Apple's MLX (mlx-scala): the conversation through the model's own chat template, greedy —
@@ -29,11 +31,11 @@ final class MlxBackend(val name: String, model: Model, chat: Chat) extends Llm.B
     def close(): Unit = session.close()
 
 object MlxBackend:
-  /** okay-llm's JSON as mlx-scala's: the same structure */
+  /** okay-llm's JSON (okay-effects-json) as mlx-scala's: the same structure */
   def json(j: Json): mlx.llm.Json = j match
-    case Json.Obj(f) => mlx.llm.Json.Obj(f.map((k, v) => k -> json(v)))
+    case Json.Obj(f) => mlx.llm.Json.Obj(VectorMap.from(f.map((k, v) => k -> json(v))))
     case Json.Arr(xs) => mlx.llm.Json.Arr(xs.map(json))
     case Json.Str(s) => mlx.llm.Json.Str(s)
-    case Json.Num(n) => mlx.llm.Json.Num(n)
+    case Json.Num(n) => mlx.llm.Json.Num(n.toDouble)
     case Json.Bool(b) => mlx.llm.Json.Bool(b)
     case Json.Null => mlx.llm.Json.Null
