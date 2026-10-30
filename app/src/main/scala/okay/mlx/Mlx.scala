@@ -58,8 +58,10 @@ object MlxBackend:
    * penalties' variables, ~/.config/okay-mlx/models.json (for clients that send none: Anthropic's API has none) */
   def open(name: String, dir: Path, mlx: OnThread = OnThread.shared): MlxBackend =
     mlx {
-      // the weights mapped (mlx-scala's SafeTensors): loaded at once, the pages the file's — OKAY_MLX_MMAP=0 reads them
-      val model = Model.load(dir, mapped = !sys.env.get("OKAY_MLX_MMAP").contains("0"))
+      // the weights mapped (mlx-scala's SafeTensors): loaded at once, the pages the file's — OKAY_MLX_MMAP=0 reads them;
+      // an unaligned file aligned where it is, once (HuggingFace's blob) — OKAY_MLX_ALIGN=copy keeps it, copies it
+      val model = Model.load(dir, mapped = !sys.env.get("OKAY_MLX_MMAP").contains("0"),
+        inPlace = !sys.env.get("OKAY_MLX_ALIGN").contains("copy"))
       val root = sys.env.get("OKAY_MLX_PREFIXES") match
         case Some("off") => None
         case Some(p) => Some(Path.of(p))
