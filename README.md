@@ -96,7 +96,8 @@ OS's cache:
 | all 256 | 19.5 GB (the file's pages) | — | 119 tok/s |
 
 Its price is a wait each layer — the router read to the CPU, to know what to read in (~70 tok/s at most): for a
-machine the model does not fit, or two models at once, not for one that holds it. Off by default.
+machine the model does not fit, or two models at once, not for one that holds it. Off by default. The next layer's
+experts are guessed (its router on this layer's input, right 82% of the time) and read ahead while the GPU computes.
 
 Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
 token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
