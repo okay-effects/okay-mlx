@@ -83,6 +83,21 @@ HuggingFace cache's own, their headers padded with spaces (as the format allows;
 Qwen3.6-35B ~35 s, no disk spent (`OKAY_MLX_ALIGN=copy`: a copy under ~/.cache/mlx-scala/aligned instead). The pages read ahead as a model maps (`madvise`): a
 switch 35B ↔ 9B, its first answer with it, ~1 s when the files are in the OS's cache (it was 10–25 s read).
 
+HOT EXPERTS (a mixture of experts — Qwen3.6-35B-A3B): `"expert_slots": 64` for a model in models.json (or
+`OKAY_MLX_EXPERT_SLOTS`) keeps 64 of each layer's 256 experts in memory, the rest read from the files as a decode
+picks them (mlx-scala's `ExpertCache`); a prompt runs on the file's pages. M4 Max, a short prompt, the files in the
+OS's cache:
+
+| a layer | the model's memory | hits | decode |
+|---|---|---|---|
+| 32 | 3.7 GB | 68% | 37 tok/s |
+| 64 | 5.9 GB | 83% | 45 tok/s |
+| 128 | 10.5 GB | 94.5% | 63 tok/s |
+| all 256 | 19.5 GB (the file's pages) | — | 119 tok/s |
+
+Its price is a wait each layer — the router read to the CPU, to know what to read in (~70 tok/s at most): for a
+machine the model does not fit, or two models at once, not for one that holds it. Off by default.
+
 Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
 token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
 `top_p`, `top_k`, `seed`, `presence_penalty`, `frequency_penalty`), else as the model's generation_config.json

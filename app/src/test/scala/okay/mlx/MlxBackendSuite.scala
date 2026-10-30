@@ -66,3 +66,8 @@ class SettingsSuite extends munit.FunSuite:
     assertEquals(Settings.of("c/d", model, Some(j)),
       mlx.llm.Sampling(temperature = 1.0, topP = 0.95, topK = 40, presencePenalty = 1.5))
     assertEquals(Settings.of("c/d", model, None), model)
+
+  test("hot experts: by model, else \"*\""):
+    val j = okay.effects.json.Json.fromText("""{"*": {"expert_slots": 32}, "a/b": {"expert_slots": 128}}""")
+    assertEquals(Settings.expertSlots("a/b", Some(j)), 128)
+    assertEquals(Settings.expertSlots("c/d", Some(j)), 32)
