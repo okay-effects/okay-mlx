@@ -53,6 +53,8 @@ service() {
 </dict></plist>
 PLIST
       launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+      # the old one gone first: bootstrap fails while launchd still holds it
+      i=0; while launchctl print "gui/$(id -u)/$label" >/dev/null 2>&1 && [ $i -lt 40 ]; do sleep 0.25; i=$((i+1)); done
       launchctl bootstrap "gui/$(id -u)" "$plist"
       echo "okay-mlx serves http://127.0.0.1:$port now, and with every login ($model first); its log: $log" ;;
     uninstall)
