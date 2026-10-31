@@ -83,8 +83,9 @@ object MlxBackend:
       val store = root.map(r => PrefixStore.forModel(r, dir, model)).orNull
       val sampling = Settings.of(name, Sampling.of(dir))
       System.err.println(s"[Info] $name samples as $sampling")
-      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx, Settings.guesses(name), slots,
-        mixture, Memory.bytes(dir))
+      // no guesses on hot experts: a pass of seven tokens wants up to 56 experts a layer, mostly not there
+      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx,
+        if slots > 0 then 0 else Settings.guesses(name), slots, mixture, Memory.bytes(dir))
     }
 
   /** a thread all MLX calls run on: `apply(f)` runs `f` there (at once if on it already) and gives its value */
