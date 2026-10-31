@@ -76,3 +76,25 @@ class SettingsSuite extends munit.FunSuite:
     val j = okay.effects.json.Json.fromText("""{"a/b": {"guesses": 0}}""")
     assertEquals(Settings.guesses("a/b", Some(j)), 0)
     assertEquals(Settings.guesses("c/d", Some(j)), 6)
+
+/** memory as it bears on a mixture of experts: hot under pressure, whole again when it has been easy a while */
+class MemorySuite extends munit.FunSuite:
+  private val minute = 60L * 1000 * 1000 * 1000
+  private val gb = 1000L * 1000 * 1000
+  test("whole when it fits; hot when not (fewer when not half fits, or critical); whole again with room, later"):
+    assertEquals(Memory.slotsFor(20 * gb, 30 * gb, 1), 0)
+    assertEquals(Memory.slotsFor(20 * gb, 17 * gb, 1), 64)     // pressure normal, room short: it pages
+    assertEquals(Memory.slotsFor(20 * gb, 30 * gb, 2), 64)
+    assertEquals(Memory.slotsFor(20 * gb, 9 * gb, 1), 32)
+    assertEquals(Memory.slotsFor(20 * gb, 30 * gb, 4), 32)
+    assertEquals(Memory.slotsWanted(64, 20 * gb, 31 * gb, 1, 11 * minute), 0)
+    assertEquals(Memory.slotsWanted(64, 20 * gb, 31 * gb, 1, 5 * minute), 64)
+    assertEquals(Memory.slotsWanted(64, 20 * gb, 25 * gb, 1, 30 * minute), 64)
+    assertEquals(Memory.slotsWanted(0, 20 * gb, 17 * gb, 1, 0), 64)
+  test("the machine tells its pressure and what is free"):
+    assert(Set(1, 2, 4).contains(Memory.pressure), Memory.pressure.toString)
+    assert(Memory.freePercent >= 0 && Memory.freePercent <= 100)
+    assert(Memory.room > 0, Memory.room.toString)
+  test("a mixture of experts, or not, by its config"):
+    for dir <- Models.snapshot("mlx-community/Qwen3.6-35B-A3B-4bit") do assert(Memory.mixture(dir))
+    for dir <- Models.snapshot("mlx-community/Qwen3.5-9B-MLX-4bit") do assert(!Memory.mixture(dir))

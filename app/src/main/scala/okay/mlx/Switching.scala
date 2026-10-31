@@ -13,10 +13,14 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
   private val running = scala.collection.mutable.LinkedHashSet.empty[Running]
   private var switching = false
 
-  private def load(repo: String): MlxBackend =
+  private var changed = System.nanoTime()
+  private var warned = false
+
+  private def load(repo: String, hot: Option[Int] = None): MlxBackend =
     val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
     System.err.println(s"[Info] loading $repo")
-    val b = MlxBackend.open(repo, dir, mlx)
+    changed = System.nanoTime()
+    val b = MlxBackend.open(repo, dir, mlx, hot)
     System.err.println(f"[Info] $repo loaded: MLX holds ${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
     b
 
@@ -45,10 +49,32 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       finally
         switching = false
         notifyAll()
+    if running.isEmpty then fitMemory()
     val r = Running()
     running += r
     (current, r)
   }
+
+  /** MEMORY AS IT IS NOW, before a request: a mixture of experts whole under pressure reloaded with its hot experts
+   * alone; hot, and memory easy again for ten minutes, whole again — unless the owner set its hot experts. A dense
+   * model under pressure: a warning (nothing to keep apart) */
+  private def fitMemory(): Unit =
+    val p = Memory.pressure
+    val room = Memory.room
+    val tight = p >= 2 || room < current.bytes + current.bytes / 10
+    if !current.mixture then
+      if tight && !warned then
+        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${current.bytes / 1e9}%.1f, pressure $p: " +
+          s"${current.name} may page")
+      warned = tight
+    else if Settings.expertSlotsSet(current.name).isEmpty then
+      val want = Memory.slotsWanted(current.slots, current.bytes, room, p, System.nanoTime() - changed)
+      if want != current.slots then
+        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${current.bytes / 1e9}%.1f, pressure $p: " +
+          s"${current.name} " + (if want > 0 then s"reloaded with $want hot experts a layer" else "reloaded whole"))
+        val name = current.name
+        current.close()
+        current = load(name, Some(want))
 
   private final class Running:
     @volatile var last: Long = System.nanoTime()

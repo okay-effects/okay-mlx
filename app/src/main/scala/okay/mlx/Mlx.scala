@@ -13,7 +13,7 @@ import mlx.llm.{Chat, Model, PrefixCache, PrefixStore, Sampling, Session}
  * requests served at once take turns on it a token at a time. Tokens drawn as a request says, else as the model's
  * generation_config.json does */
 final class MlxBackend private (val name: String, model: Model, chat: Chat, defaults: Sampling, cache: PrefixCache,
-    mlx: MlxBackend.OnThread, guesses: Int) extends Llm.Backend:
+    mlx: MlxBackend.OnThread, guesses: Int, val slots: Int, val mixture: Boolean, val bytes: Long) extends Llm.Backend:
   private def prompt(ask: Ask): Array[Int] =
     MlxBackend.dump(chat, ask)
     chat.prompt(ask.messages, ask.tools, Map("enable_thinking" -> ask.thinking))
@@ -61,13 +61,19 @@ object MlxBackend:
    * disk — under OKAY_MLX_PREFIXES (`off`: memory alone), else ~/.cache/okay-mlx/prefixes — so a restart does not
    * compute an agent's system prompt again. Sampling as `Settings` says: the model's generation_config.json, the
    * penalties' variables, ~/.config/okay-mlx/models.json (for clients that send none: Anthropic's API has none) */
-  def open(name: String, dir: Path, mlx: OnThread = OnThread.shared): MlxBackend =
+  def open(name: String, dir: Path, mlx: OnThread = OnThread.shared, hot: Option[Int] = None): MlxBackend =
     mlx {
       // the weights mapped (mlx-scala's SafeTensors): loaded at once, the pages the file's — OKAY_MLX_MMAP=0 reads them;
       // an unaligned file aligned where it is, once (HuggingFace's blob) — OKAY_MLX_ALIGN=copy keeps it, copies it
       val mapped = !sys.env.get("OKAY_MLX_MMAP").contains("0")
-      val slots = if mapped then Settings.expertSlots(name) else 0
-      if slots > 0 then System.err.println(s"[Info] $name: $slots hot experts a layer")
+      val mixture = Memory.mixture(dir)
+      // the hot experts: as asked, else as the owner set them, else as the machine's memory allows
+      val slots =
+        if !mapped || !mixture then 0
+        else hot.orElse(Settings.expertSlotsSet(name))
+          .getOrElse(Memory.slotsFor(Memory.bytes(dir), Memory.room, Memory.pressure))
+      if slots > 0 then System.err.println(f"[Info] $name: $slots hot experts a layer (room ${Memory.room / 1e9}%.1f GB " +
+        f"for ${Memory.bytes(dir) / 1e9}%.1f, pressure ${Memory.pressure})")
       val model = Model.load(dir, mapped, inPlace = !sys.env.get("OKAY_MLX_ALIGN").contains("copy"),
         expertSlots = slots)
       val root = sys.env.get("OKAY_MLX_PREFIXES") match
@@ -77,7 +83,8 @@ object MlxBackend:
       val store = root.map(r => PrefixStore.forModel(r, dir, model)).orNull
       val sampling = Settings.of(name, Sampling.of(dir))
       System.err.println(s"[Info] $name samples as $sampling")
-      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx, Settings.guesses(name))
+      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx, Settings.guesses(name), slots,
+        mixture, Memory.bytes(dir))
     }
 
   /** a thread all MLX calls run on: `apply(f)` runs `f` there (at once if on it already) and gives its value */

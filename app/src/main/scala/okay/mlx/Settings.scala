@@ -31,9 +31,12 @@ object Settings:
   /** HOT EXPERTS: how many experts a layer a mixture of experts keeps in memory (mlx-scala's ExpertCache), the rest
    * read from the files as picked — `"expert_slots"` by model (or `"*"`), else OKAY_MLX_EXPERT_SLOTS; 0: all of them.
    * Qwen3.6-35B, 64 a layer: ~6 GB instead of 19.5, the decode ~45 tok/s instead of ~119 */
-  def expertSlots(name: String, settings: Option[Json] = read()): Int =
+  def expertSlots(name: String, settings: Option[Json] = read()): Int = expertSlotsSet(name, settings).getOrElse(0)
+
+  /** the hot experts as the owner set them, if they did — else the gateway decides by the machine's memory */
+  def expertSlotsSet(name: String, settings: Option[Json] = read()): Option[Int] =
     Seq(name, "*").flatMap(k => settings.flatMap(_.field(k)).flatMap(_.field("expert_slots"))).headOption.map(_.int)
-      .orElse(sys.env.get("OKAY_MLX_EXPERT_SLOTS").flatMap(_.toIntOption)).getOrElse(0)
+      .orElse(sys.env.get("OKAY_MLX_EXPERT_SLOTS").flatMap(_.toIntOption))
 
   /** GUESSES CHECKED a pass (mlx-scala's Session: prompt lookup, speculative): `"guesses"` by model (or `"*"`), else
    * OKAY_MLX_GUESSES, else 6; 0: none. Qwen3.6-35B rewriting code: ~150 tok/s instead of ~117 */

@@ -95,6 +95,13 @@ OS's cache:
 | 128 | 10.5 GB | 94.5% | 63 tok/s |
 | all 256 | 19.5 GB (the file's pages) | — | 119 tok/s |
 
+With no `expert_slots` set, the gateway decides by the machine's memory: a mixture of experts loads whole when its
+files fit in the room the OS's file cache has (free, speculative and file-backed pages), with a tenth to spare; else
+with 64 hot experts a layer (32 when not half of it fits, or the pressure is critical) — and before each request,
+nothing running, a model whole that no longer fits is reloaded hot, a hot one whole again once there has been room
+for half as much again for ten minutes. (Seen: macOS's pressure said normal while others' compressed memory left
+16.7 GB for Qwen3.6-35B's 19.5 — mapped whole, it paged at 0.2 tok/s.) A dense model that does not fit: a warning.
+
 Its price is a wait each layer — the router read to the CPU, to know what to read in (~70 tok/s at most): for a
 machine the model does not fit, or two models at once, not for one that holds it. Off by default. The next layer's
 experts are guessed (its router on this layer's input, right 82% of the time) and read ahead while the GPU computes.
