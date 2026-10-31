@@ -35,6 +35,12 @@ object Settings:
     Seq(name, "*").flatMap(k => settings.flatMap(_.field(k)).flatMap(_.field("expert_slots"))).headOption.map(_.int)
       .orElse(sys.env.get("OKAY_MLX_EXPERT_SLOTS").flatMap(_.toIntOption)).getOrElse(0)
 
+  /** GUESSES CHECKED a pass (mlx-scala's Session: prompt lookup, speculative): `"guesses"` by model (or `"*"`), else
+   * OKAY_MLX_GUESSES, else 6; 0: none. Qwen3.6-35B rewriting code: ~150 tok/s instead of ~117 */
+  def guesses(name: String, settings: Option[Json] = read()): Int =
+    Seq(name, "*").flatMap(k => settings.flatMap(_.field(k)).flatMap(_.field("guesses"))).headOption.map(_.int)
+      .orElse(sys.env.get("OKAY_MLX_GUESSES").flatMap(_.toIntOption)).getOrElse(6)
+
   def read(): Option[Json] =
     val f = file
     if !Files.exists(f) then None

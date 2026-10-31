@@ -71,3 +71,8 @@ class SettingsSuite extends munit.FunSuite:
     val j = okay.effects.json.Json.fromText("""{"*": {"expert_slots": 32}, "a/b": {"expert_slots": 128}}""")
     assertEquals(Settings.expertSlots("a/b", Some(j)), 128)
     assertEquals(Settings.expertSlots("c/d", Some(j)), 32)
+
+  test("guesses: by model, else 6"):
+    val j = okay.effects.json.Json.fromText("""{"a/b": {"guesses": 0}}""")
+    assertEquals(Settings.guesses("a/b", Some(j)), 0)
+    assertEquals(Settings.guesses("c/d", Some(j)), 6)

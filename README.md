@@ -99,6 +99,11 @@ Its price is a wait each layer — the router read to the CPU, to know what to r
 machine the model does not fit, or two models at once, not for one that holds it. Off by default. The next layer's
 experts are guessed (its router on this layer's input, right 82% of the time) and read ahead while the GPU computes.
 
+Guesses checked (mlx-scala's `Session`, prompt lookup): up to 6 next tokens guessed from the text itself and checked
+in one pass — an agent rewriting what it has read goes faster (Qwen3.6-35B, a piece of code rewritten: 117 → 157
+tok/s, greedy; 142 drawn), the draws' distribution unchanged. `"guesses"` by model in models.json, or
+`OKAY_MLX_GUESSES` (0: none); the log says how many were taken.
+
 Requests are served at once: every MLX call runs on one thread of the backend's own, the generations taking turns a
 token at a time — a short request does not wait for a long one. Tokens drawn as a request says (`temperature`,
 `top_p`, `top_k`, `seed`, `presence_penalty`, `frequency_penalty`), else as the model's generation_config.json

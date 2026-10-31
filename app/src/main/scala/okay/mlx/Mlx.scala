@@ -13,7 +13,7 @@ import mlx.llm.{Chat, Model, PrefixCache, PrefixStore, Sampling, Session}
  * requests served at once take turns on it a token at a time. Tokens drawn as a request says, else as the model's
  * generation_config.json does */
 final class MlxBackend private (val name: String, model: Model, chat: Chat, defaults: Sampling, cache: PrefixCache,
-    mlx: MlxBackend.OnThread) extends Llm.Backend:
+    mlx: MlxBackend.OnThread, guesses: Int) extends Llm.Backend:
   private def prompt(ask: Ask): Array[Int] =
     MlxBackend.dump(chat, ask)
     chat.prompt(ask.messages, ask.tools, Map("enable_thinking" -> ask.thinking))
@@ -36,7 +36,8 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
   def start(ask: Ask): Llm.Generation = mlx(new Llm.Generation:
     private val tokens = prompt(ask)
     // a prompt's prefixes kept across requests: an agent's system prompt, tools and the conversation so far
-    private val session = Session(model, tokens, ask.maxTokens, chat.stops, cache, chat.marks(tokens), sampling(ask))
+    private val session = Session(model, tokens, ask.maxTokens, chat.stops, cache, chat.marks(tokens), sampling(ask),
+      guesses)
     private val stream = chat.tokenizer.Stream()
     private val sb = new StringBuilder
     def next(): Option[String] = mlx(session.next().map { t =>
@@ -49,7 +50,11 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
       val t = session.timing
       Timing(t.promptTokens, t.prefillNanos, t.tokens, t.decodeNanos, t.cachedTokens)
     def byStop: Boolean = session.endedByStop
-    def close(): Unit = mlx(session.close()))
+    def close(): Unit = mlx {
+      session.close()
+      if session.passes > 0 then System.err.println(s"[Info] guesses: ${session.taken} of ${session.guessed} taken, " +
+        s"${session.passes} passes of ${session.timing.tokens} tokens")
+    })
 
 object MlxBackend:
   /** the model of a directory, loaded on the backend's own MLX thread; its prompts' prefixes kept in memory and on
@@ -72,7 +77,7 @@ object MlxBackend:
       val store = root.map(r => PrefixStore.forModel(r, dir, model)).orNull
       val sampling = Settings.of(name, Sampling.of(dir))
       System.err.println(s"[Info] $name samples as $sampling")
-      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx)
+      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx, Settings.guesses(name))
     }
 
   /** a thread all MLX calls run on: `apply(f)` runs `f` there (at once if on it already) and gives its value */
