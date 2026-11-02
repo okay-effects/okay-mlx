@@ -16,7 +16,7 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
     mlx: MlxBackend.OnThread, guesses: Int, val slots: Int, val mixture: Boolean, val bytes: Long) extends Llm.Backend:
   private def prompt(ask: Ask): Array[Int] =
     MlxBackend.dump(chat, ask)
-    chat.prompt(ask.messages, ask.tools, Map("enable_thinking" -> ask.thinking))
+    chat.prompt(ask.messages, ask.tools, MlxBackend.kwargs(ask))
 
   private def sampling(ask: Ask): Sampling =
     val s = ask.sampling
@@ -57,6 +57,11 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
     })
 
 object MlxBackend:
+  /** the chat template's arguments: thinking as asked, and the model's past think blocks kept — Qwen3.6's template
+   * draws them apart once a person speaks again unless asked to keep them, and a prompt whose beginning changed
+   * misses the prefix cache (every new message computed the agent's last task again; mlx-scala's PrefixLawSuite) */
+  def kwargs(ask: Ask): Map[String, Any] = Map("enable_thinking" -> ask.thinking, "preserve_thinking" -> true)
+
   /** the model of a directory, loaded on the backend's own MLX thread; its prompts' prefixes kept in memory and on
    * disk — under OKAY_MLX_PREFIXES (`off`: memory alone), else ~/.cache/okay-mlx/prefixes — so a restart does not
    * compute an agent's system prompt again. Sampling as `Settings` says: the model's generation_config.json, the
@@ -111,5 +116,5 @@ object MlxBackend:
   private val dumped = java.util.concurrent.atomic.AtomicInteger()
   private def dump(chat: Chat, ask: Ask): Unit = sys.env.get("OKAY_MLX_DUMP").foreach { dir =>
     java.nio.file.Files.writeString(Path.of(dir, s"prompt-${dumped.incrementAndGet()}.txt"),
-      chat.template(ask.messages.map(identity), ask.tools, true, Map("enable_thinking" -> ask.thinking)))
+      chat.template(ask.messages.map(identity), ask.tools, true, kwargs(ask)))
   }

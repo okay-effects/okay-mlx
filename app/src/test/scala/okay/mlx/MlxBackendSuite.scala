@@ -98,3 +98,9 @@ class MemorySuite extends munit.FunSuite:
   test("a mixture of experts, or not, by its config"):
     for dir <- Models.snapshot("mlx-community/Qwen3.6-35B-A3B-4bit") do assert(Memory.mixture(dir))
     for dir <- Models.snapshot("mlx-community/Qwen3.5-9B-MLX-4bit") do assert(!Memory.mixture(dir))
+
+/** the chat template's arguments: the past think blocks kept, so a prompt's beginning stays (the prefix cache) */
+class KwargsSuite extends munit.FunSuite:
+  test("thinking as asked, past think blocks kept"):
+    val a = Programs.user("hi")
+    assertEquals(MlxBackend.kwargs(a), Map[String, Any]("enable_thinking" -> false, "preserve_thinking" -> true))
