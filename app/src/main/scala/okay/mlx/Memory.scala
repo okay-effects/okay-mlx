@@ -23,11 +23,17 @@ object Memory:
     else 0
 
   /** the hot experts a mixture of experts running with `now` (0: whole) should run with: whole and not fitting →
-   * hot; hot, room for half as much again, the last change `sinceNanos` ago — ten minutes or more → whole */
+   * hot; hot, room for a fifth more than it, the last change `sinceNanos` ago — ten minutes or more → whole. (Half as
+   * much again, before: never on a 38 GB machine with an IDE and a browser open — stuck hot, where a prompt's prefill
+   * reads the mapped experts whole: 8.5 s for 500 tokens on 2.7k cached, whole 0.4 s; decode 10 against 110 tok/s) */
   def slotsWanted(now: Int, bytes: Long, room: Long, pressure: Int, sinceNanos: Long): Int =
     if now == 0 then slotsFor(bytes, room, pressure)
-    else if pressure == 1 && room > bytes + bytes / 2 && sinceNanos > 10L * 60 * 1000 * 1000 * 1000 then 0
+    else if pressure == 1 && room > bytes + bytes / 5 && sinceNanos > 10L * 60 * 1000 * 1000 * 1000 then 0
     else now
+
+  /** a size set in gigabytes by a variable, else `default`; bytes */
+  def gigabytes(variable: String, default: Double): Long =
+    (sys.env.get(variable).flatMap(_.toDoubleOption).getOrElse(default) * 1e9).toLong
 
   /** a model's weights, bytes: its .safetensors */
   def bytes(dir: Path): Long =

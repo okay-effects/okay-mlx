@@ -54,9 +54,16 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
       session.close()
       if session.passes > 0 then System.err.println(s"[Info] guesses: ${session.taken} of ${session.guessed} taken, " +
         s"${session.passes} passes of ${session.timing.tokens} tokens")
+      MlxBackend.memory()
     })
 
 object MlxBackend:
+  /** MLX's memory after a request: what its arrays hold, what it keeps for reuse, the most it held */
+  def memory(): Unit =
+    val m = _root_.mlx.Mlx
+    System.err.println(f"[Info] memory: MLX active ${m.activeMemory / 1e9}%.1f GB, kept for reuse " +
+      f"${m.cacheMemory / 1e9}%.1f GB, peak ${m.peakMemory / 1e9}%.1f GB")
+
   /** the chat template's arguments: thinking as asked, and the model's past think blocks kept — Qwen3.6's template
    * draws them apart once a person speaks again unless asked to keep them, and a prompt whose beginning changed
    * misses the prefix cache (every new message computed the agent's last task again; mlx-scala's PrefixLawSuite) */
@@ -86,10 +93,15 @@ object MlxBackend:
         case Some(p) => Some(Path.of(p))
         case None => Some(Path.of(sys.props("user.home"), ".cache", "okay-mlx", "prefixes"))
       val store = root.map(r => PrefixStore.forModel(r, dir, model)).orNull
+      // what MLX keeps beyond the weights, bounded: its freed buffers (a long prompt's, gigabytes, else kept whole) and
+      // the prefixes in memory (on disk too: one evicted comes back from there) — unbounded, a 16k prompt on
+      // Qwen3.6-35B left 23 GB active + 5 GB kept on a 38 GB machine: it paged, 0.2 tok/s until restarted
+      _root_.mlx.Mlx.setCacheLimit(Memory.gigabytes("OKAY_MLX_CACHE_GB", 1.0))
+      val prefixes = Memory.gigabytes("OKAY_MLX_PREFIX_GB", if store == null then 4.0 else 1.5)
       val sampling = Settings.of(name, Sampling.of(dir))
       System.err.println(s"[Info] $name samples as $sampling")
       // no guesses on hot experts: a pass of seven tokens wants up to 56 experts a layer, mostly not there
-      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(store = store), mlx,
+      MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(prefixes, store), mlx,
         if slots > 0 then 0 else Settings.guesses(name), slots, mixture, Memory.bytes(dir))
     }
 

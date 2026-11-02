@@ -99,8 +99,18 @@ With no `expert_slots` set, the gateway decides by the machine's memory: a mixtu
 files fit in the room the OS's file cache has (free, speculative and file-backed pages), with a tenth to spare; else
 with 64 hot experts a layer (32 when not half of it fits, or the pressure is critical) — and before each request,
 nothing running, a model whole that no longer fits is reloaded hot, a hot one whole again once there has been room
-for half as much again for ten minutes. (Seen: macOS's pressure said normal while others' compressed memory left
+for a fifth more than it for ten minutes. (Seen: macOS's pressure said normal while others' compressed memory left
 16.7 GB for Qwen3.6-35B's 19.5 — mapped whole, it paged at 0.2 tok/s.) A dense model that does not fit: a warning.
+Hot is the last resort: a prompt's prefill reads the mapped experts whole — measured on Qwen3.6-35B, memory tight,
+500 new tokens on 2.7k cached took 8.5 s hot against 0.4 s whole, decode 10 against 110 tok/s.
+
+WHAT MLX KEEPS BEYOND THE WEIGHTS, bounded: its freed buffers at most 1 GB (`OKAY_MLX_CACHE_GB`; MLX's own default
+keeps a long prompt's buffers whole), the prefixes in memory at most 1.5 GB (`OKAY_MLX_PREFIX_GB`; they are on disk
+too, an evicted one comes back from there; 4 GB with `OKAY_MLX_PREFIXES=off`). Unbounded, one 16k prompt on
+Qwen3.6-35B left 23 GB active and 5–7 GB kept on a 38 GB machine with an IDE and a browser: it paged — 208 new tokens
+on 19.5k cached took 16 s and decoded at 0.3 tok/s until a restart. Bounded (3 rounds, alternated, medians): the cold
+19.7k prompt 16.7 s (was 40.9), then 0.32 s each (was 15.9), decode ~98 tok/s (was 0.3); the log says after each
+request what MLX holds (`memory: MLX active …, kept for reuse …, peak …`).
 
 Its price is a wait each layer — the router read to the CPU, to know what to read in (~70 tok/s at most): for a
 machine the model does not fit, or two models at once, not for one that holds it. Off by default. The next layer's

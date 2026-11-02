@@ -89,7 +89,8 @@ class MemorySuite extends munit.FunSuite:
     assertEquals(Memory.slotsFor(20 * gb, 30 * gb, 4), 32)
     assertEquals(Memory.slotsWanted(64, 20 * gb, 31 * gb, 1, 11 * minute), 0)
     assertEquals(Memory.slotsWanted(64, 20 * gb, 31 * gb, 1, 5 * minute), 64)
-    assertEquals(Memory.slotsWanted(64, 20 * gb, 25 * gb, 1, 30 * minute), 64)
+    assertEquals(Memory.slotsWanted(64, 20 * gb, 25 * gb, 1, 30 * minute), 0)
+    assertEquals(Memory.slotsWanted(64, 20 * gb, 23 * gb, 1, 30 * minute), 64)    // not a fifth to spare
     assertEquals(Memory.slotsWanted(0, 20 * gb, 17 * gb, 1, 0), 64)
   test("the machine tells its pressure and what is free"):
     assert(Set(1, 2, 4).contains(Memory.pressure), Memory.pressure.toString)
