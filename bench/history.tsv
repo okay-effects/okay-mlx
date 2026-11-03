@@ -1,0 +1,6 @@
+date	okay-mlx	mlx-scala	host_load	workload	mine	ref	ratio	note
+2026-11-03	21fc8b7	8ea27e2	3.9	Qwen3.8-27B decode 256, greedy, no guesses (tok/s)	18.8	19.4	1.03	mlx_lm 0.32.2, MLX 0.32.4; 3 rounds alternated, medians; the gateway stopped; was 17-19 vs 21-22 (2026-10)
+2026-11-03	21fc8b7	8ea27e2	4.2	Qwen3.6-35B-A3B decode 256, greedy, no guesses (tok/s)	105.2	109.0	1.04	3 rounds alternated, medians; okay-mlx's first run cold (mapped weights paged in): 28.1
+2026-11-03	21fc8b7	8ea27e2	4.2	Qwen3.6-35B-A3B decode 256, greedy, guesses on (tok/s)	103.3	-	-	one run; 0 of 7 guesses taken on a story (no repeats to look up)
+2026-11-02	21fc8b7	8ea27e2	3.0	gateway, 35B, cold prefill 19.7k (s)	16.7	-	-	memory bounded (cache 1 GB, prefixes 1.5 GB); unbounded it paged: 40.9 s, then 0.3 tok/s
+2026-11-02	21fc8b7	8ea27e2	3.0	gateway, 35B, prefill 208 new on 19.5k cached (s)	0.32	-	-	unbounded: 15.9 s (paging); 3 rounds alternated, medians

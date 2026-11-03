@@ -136,3 +136,11 @@ each rendered prompt there: where two turns' prompts part is where a cache misse
 
 Claude Code ran against the gateway on Scala Native with it: a 13.6k-token prompt with its tools; the model called
 `Write` and made the file.
+
+## Measured
+
+`bench/history.tsv`, appended to, never rewritten: each run's commit, the machine's load, the workload, ours, the
+reference (mlx_lm), the ratio. 2026-11-03: decode at mlx_lm's — Qwen3.8-27B 18.8 against 19.4 tok/s, Qwen3.6-35B-A3B
+105 against 109 (3 rounds alternated, the gateway stopped). A first generation after a cold start is slower (the
+mapped weights paged in as they are read): 28 tok/s once, then 105.
+
