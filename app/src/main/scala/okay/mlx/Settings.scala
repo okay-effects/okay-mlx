@@ -44,6 +44,13 @@ object Settings:
     Seq(name, "*").flatMap(k => settings.flatMap(_.field(k)).flatMap(_.field("guesses"))).headOption.map(_.int)
       .orElse(sys.env.get("OKAY_MLX_GUESSES").flatMap(_.toIntOption)).getOrElse(6)
 
+  /** THE MODEL'S OWN DRAFTS a pass (mlx-scala's multi-token prediction, when its draft pack is there: mtpFetch):
+   * `"drafts"` by model (or `"*"`), else OKAY_MLX_DRAFTS, else 2; 0: none (guesses from the text then).
+   * Qwen3.6-35B-A3B: 2.35 tokens a pass, ~121 tok/s instead of ~93 (1 draft: 117, 3: 109) */
+  def drafts(name: String, settings: Option[Json] = read()): Int =
+    Seq(name, "*").flatMap(k => settings.flatMap(_.field(k)).flatMap(_.field("drafts"))).headOption.map(_.int)
+      .orElse(sys.env.get("OKAY_MLX_DRAFTS").flatMap(_.toIntOption)).getOrElse(2)
+
   def read(): Option[Json] =
     val f = file
     if !Files.exists(f) then None

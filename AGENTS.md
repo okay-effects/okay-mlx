@@ -8,6 +8,9 @@ converted to mlx-scala's), and `Main` (ask, bench, serve). One crossProject `app
 - `MlxBackend.open` loads the model ON the backend's MLX thread (`OnThread`): every MLX call there, whichever HTTP
   thread asks. Sampling: the request's, else `Sampling.of(dir)`. Once, at temperature 1 (Qwen3.6's own), Claude Code
   looped ~400 turns on a two-step task; four reruns did not — no presence_penalty yet.
+- Drafts: the model's own (mlx-scala MTP, when its pack is there: `mtpFetch`), `Settings.drafts` (OKAY_MLX_DRAFTS,
+  default 2; 0: guesses from the text instead), off on hot experts. The cache also keeps the state after each answer
+  and after `<tool_call>` (`Chat.anchors`).
 - `MlxBackend` keeps one `PrefixCache` for all requests; `OKAY_MLX_DUMP=<dir>` writes each rendered prompt (a cache
   miss is where two prompts part — Claude Code's billing header and its mid-conversation system messages were two).
 - The effects, the gateway, the server, the programs are okay-llm's; nothing here but the hardware and the wiring.

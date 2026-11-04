@@ -13,7 +13,10 @@ import mlx.llm.{Chat, Model, PrefixCache, PrefixStore, Sampling, Session}
  * requests served at once take turns on it a token at a time. Tokens drawn as a request says, else as the model's
  * generation_config.json does */
 final class MlxBackend private (val name: String, model: Model, chat: Chat, defaults: Sampling, cache: PrefixCache,
-    mlx: MlxBackend.OnThread, guesses: Int, val slots: Int, val mixture: Boolean, val bytes: Long) extends Llm.Backend:
+    mlx: MlxBackend.OnThread, guesses: Int, drafts: Int, val slots: Int, val mixture: Boolean, val bytes: Long)
+    extends Llm.Backend:
+  // whether the model drafts its own (it has a draft layer, and drafts are wanted)
+  private val drafting = drafts > 0 && { val d = model.newDraft(); if d != null then d.close(); d != null }
   private def prompt(ask: Ask): Array[Int] =
     MlxBackend.dump(chat, ask)
     chat.prompt(ask.messages, ask.tools, MlxBackend.kwargs(ask))
@@ -36,8 +39,10 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
   def start(ask: Ask): Llm.Generation = mlx(new Llm.Generation:
     private val tokens = prompt(ask)
     // a prompt's prefixes kept across requests: an agent's system prompt, tools and the conversation so far
+    // kept too: the state after the answer and after a tool call's opener (the next turn begins there); the model's
+    // own drafts when it has a draft layer (Settings.drafts), else guesses from the text
     private val session = Session(model, tokens, ask.maxTokens, chat.stops, cache, chat.marks(tokens), sampling(ask),
-      guesses)
+      guesses, anchors = chat.anchors, drafts = drafts)
     private val stream = chat.tokenizer.Stream()
     private val sb = new StringBuilder
     def next(): Option[String] = mlx(session.next().map { t =>
@@ -52,8 +57,10 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
     def byStop: Boolean = session.endedByStop
     def close(): Unit = mlx {
       session.close()
-      if session.passes > 0 then System.err.println(s"[Info] guesses: ${session.taken} of ${session.guessed} taken, " +
-        s"${session.passes} passes of ${session.timing.tokens} tokens")
+      if session.passes > 0 then
+        val what = if drafting then "drafts" else "guesses"
+        System.err.println(s"[Info] $what: ${session.taken} of ${session.guessed} taken, " +
+          s"${session.passes} passes of ${session.timing.tokens} tokens")
       MlxBackend.memory()
     })
 
@@ -102,7 +109,8 @@ object MlxBackend:
       System.err.println(s"[Info] $name samples as $sampling")
       // no guesses on hot experts: a pass of seven tokens wants up to 56 experts a layer, mostly not there
       MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(prefixes, store), mlx,
-        if slots > 0 then 0 else Settings.guesses(name), slots, mixture, Memory.bytes(dir))
+        if slots > 0 then 0 else Settings.guesses(name), if slots > 0 then 0 else Settings.drafts(name), slots, mixture,
+        Memory.bytes(dir))
     }
 
   /** a thread all MLX calls run on: `apply(f)` runs `f` there (at once if on it already) and gives its value */
