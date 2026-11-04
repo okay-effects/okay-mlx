@@ -36,7 +36,7 @@ service() {
   case "${1:-}" in
     install)
       # the model loaded first (the argument, else MLX_MODEL, else Qwen3-4B), the port (8090)
-      model=${2:-${MLX_MODEL:-mlx-community/Qwen3-4B-4bit}}; port=${3:-8090}
+      model=${2:-${MLX_MODEL:-mlx-community/Qwen3.5-4B-MLX-4bit}}; port=${3:-8090}
       mkdir -p "$HOME/Library/LaunchAgents"
       cat > "$plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

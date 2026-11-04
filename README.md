@@ -14,8 +14,9 @@ MLX_MODEL=mlx-community/Qwen3.6-35B-A3B-4bit sbt "appNative/run serve 8090"
 ANTHROPIC_BASE_URL=http://127.0.0.1:8090 ANTHROPIC_API_KEY=local claude -p "Create hello.txt with the word okay"
 ```
 
-The model: `MLX_MODEL`, a HuggingFace repository in the cache — Qwen3 (`mlx-community/Qwen3-4B-4bit`, the default),
-Qwen3.5, Qwen3.6 (`mlx-community/Qwen3.6-35B-A3B-4bit`).
+The model: `MLX_MODEL`, a HuggingFace repository in the cache — Qwen3 (`mlx-community/Qwen3-4B-4bit`),
+Qwen3.5 (`mlx-community/Qwen3.5-4B-MLX-4bit`, the default: its own drafts once mlx-scala's `mtpFetch` made its pack),
+Qwen3.6 (`mlx-community/Qwen3.6-35B-A3B-4bit`).
 
 ```scala
 val backend = MlxBackend.open(repo, dir)   // the model on a thread of its own
