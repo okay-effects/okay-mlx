@@ -115,3 +115,18 @@ class KwargsSuite extends munit.FunSuite:
   test("thinking as asked, past think blocks kept"):
     val a = Programs.user("hi")
     assertEquals(MlxBackend.kwargs(a), Map[String, Any]("enable_thinking" -> false, "preserve_thinking" -> true))
+
+/** adapters by name: `<repo>+<adapter>` when the adapter's file for that repository is there */
+class AdaptersSuite extends munit.FunSuite:
+  test("a model's name split into its repository and an adapter that is there"):
+    val root = java.nio.file.Files.createTempDirectory("adapters")
+    val f = Adapters.path("okay", "org/model", root)
+    java.nio.file.Files.createDirectories(f.getParent)
+    java.nio.file.Files.write(f, Array[Byte](0))
+    assertEquals(f, root.resolve("okay/org--model.safetensors"))
+    assertEquals(Adapters.split("org/model+okay", root), ("org/model", Some("okay")))
+    assertEquals(Adapters.split("org/model", root), ("org/model", None))
+    assertEquals(Adapters.split("org/model+none", root), ("org/model+none", None)) // not there: the name as it is
+    assertEquals(Adapters.split("org/other+okay", root), ("org/other+okay", None))
+    assertEquals(Adapters.of("org/model", root), Vector("okay"))
+    assertEquals(Adapters.of("org/other", root), Vector.empty)

@@ -24,28 +24,42 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     System.err.println(f"[Info] $repo loaded: MLX holds ${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
     b
 
-  def name: String = synchronized(current.name)
-  override def models: Vector[String] = synchronized(current.name +: Models.cached().filterNot(_ == current.name))
+  def name: String = synchronized(current.name + current.adapter.fold("")("+" + _))
+  override def models: Vector[String] = synchronized {
+    val all = Models.cached().flatMap(m => m +: Adapters.of(m).map(a => s"$m+$a"))
+    name +: all.filterNot(_ == name)
+  }
 
-  /** the model for a request: the one it names if that one loads, else the one there now */
-  private def wanted(ask: Ask): String =
-    ask.model.filter(m => m.contains("/") && Models.cached().contains(m)).getOrElse(current.name)
+  /** the model for a request and its adapter: the one it names if that one loads (`<repo>+<adapter>`: with an
+   * adapter that is there), else the one there now as it is */
+  private def wanted(ask: Ask): (String, Option[String]) =
+    ask.model.map(Adapters.split(_)).filter((m, _) => m.contains("/") && Models.cached().contains(m))
+      .getOrElse((current.name, current.adapter))
 
-  /** the backend for `ask`, the model switched first if it names another; held (a generation) until released */
+  /** the generations running let end (one silent for a minute: its client gone, closed) */
+  private def drain(): Unit =
+    while running.nonEmpty do
+      val now = System.nanoTime()
+      running.filter(r => now - r.last > Switching.abandoned).foreach(_.abandon())
+      if running.nonEmpty then wait(1000)
+
+  /** the backend for `ask`, the model switched first if it names another — or its adapter put on or off (the model
+   * not loaded again, the generations on it let end first: an adapter is the model's for all of them); held (a
+   * generation) until released */
   private def hold(ask: Ask): (MlxBackend, Running) = synchronized {
     // a switch going on: every request waits for it (no new generation on the old model holds it up)
     while switching do wait(1000)
-    val w = wanted(ask)
-    if w != current.name then
+    val (w, a) = wanted(ask)
+    if w != current.name || a != current.adapter then
       switching = true
       try
-        while running.nonEmpty do
-          val now = System.nanoTime()
-          running.filter(r => now - r.last > Switching.abandoned).foreach(_.abandon())
-          if running.nonEmpty then wait(1000)
-        current.close()
-        System.err.println(f"[Info] ${current.name} closed: MLX holds ${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
-        current = load(w)
+        drain()
+        if w != current.name then
+          current.close()
+          System.err.println(f"[Info] ${current.name} closed: MLX holds " +
+            f"${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
+          current = load(w)
+        current.use(a)
       finally
         switching = false
         notifyAll()
@@ -73,9 +87,10 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       if want != current.slots then
         System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${current.bytes / 1e9}%.1f, pressure $p: " +
           s"${current.name} " + (if want > 0 then s"reloaded with $want hot experts a layer" else "reloaded whole"))
-        val name = current.name
+        val (name, a) = (current.name, current.adapter)
         current.close()
         current = load(name, Some(want))
+        current.use(a)
 
   private final class Running:
     @volatile var last: Long = System.nanoTime()

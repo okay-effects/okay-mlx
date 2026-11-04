@@ -3,7 +3,7 @@ package okay.mlx
 import java.nio.file.Path
 import java.util.concurrent.{Callable, ExecutionException, Executors}
 import okay.llm.{Ask, Llm, Timing}
-import mlx.llm.{Chat, Model, PrefixCache, PrefixStore, Sampling, Session}
+import mlx.llm.{Adaptable, Chat, Lora, Model, PrefixCache, PrefixStore, Sampling, Session}
 
 /** okay-llm's model on Apple's MLX (mlx-scala): the conversation through the model's own chat template — a
  * `Llm.Backend`; `Llm.on(backend)` handles the `Llm` effect. The messages pass as they are: okay-llm and mlx-scala
@@ -29,20 +29,41 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
 
   def count(ask: Ask): Int = mlx(prompt(ask).length)
 
+  // THE ADAPTER ON the model now (`Adapters`), if any; a prefix cache for each (with one on, the model's states are
+  // another model's: the base's prefixes do not hold) — the base's on disk too, an adapter's in memory alone
+  private var adapterNow: Option[String] = None
+  private var adapterScope: _root_.mlx.Scope | Null = null
+  private val caches = scala.collection.mutable.Map[Option[String], PrefixCache](None -> cache)
+  def adapter: Option[String] = adapterNow
+
+  /** the adapter put on (or, None, taken off): no generation may be running (the caller waits for them) */
+  def use(a: Option[String]): Unit = if a != adapterNow then mlx {
+    model match
+      case m: Adaptable =>
+        m.lora = Map.empty
+        if adapterScope != null then adapterScope.nn.close()
+        adapterScope = a.map(n => Lora.attach(m, Adapters.path(n, name).toString)).orNull
+        adapterNow = a
+        System.err.println(s"[Info] $name: " + a.fold("no adapter")(n => s"adapter $n on"))
+      case _ => System.err.println(s"[Warn] $name takes no adapters: ${a.mkString} not put on")
+  }
+
   /** the model and its prefixes freed, MLX's buffers given back: the memory free for another model */
   def close(): Unit = mlx {
-    cache.clear()
+    caches.values.foreach(_.clear())
+    if adapterScope != null then adapterScope.nn.close()
     model.close()
     _root_.mlx.Mlx.clearCache()
   }
 
   def start(ask: Ask): Llm.Generation = mlx(new Llm.Generation:
     private val tokens = prompt(ask)
+    private val prefixes = caches.getOrElseUpdate(adapterNow, PrefixCache(cache.budget))
     // a prompt's prefixes kept across requests: an agent's system prompt, tools and the conversation so far
     // kept too: the state after the answer and after a tool call's opener (the next turn begins there); the model's
     // own drafts when it has a draft layer (Settings.drafts), else guesses from the text
-    private val session = Session(model, tokens, ask.maxTokens, chat.stops, cache, chat.marks(tokens), sampling(ask),
-      guesses, anchors = chat.anchors, drafts = drafts)
+    private val session = Session(model, tokens, ask.maxTokens, chat.stops, prefixes, chat.marks(tokens),
+      sampling(ask), guesses, anchors = chat.anchors, drafts = drafts)
     private val stream = chat.tokenizer.Stream()
     private val sb = new StringBuilder
     def next(): Option[String] = mlx(session.next().map { t =>
