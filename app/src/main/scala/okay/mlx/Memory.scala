@@ -13,6 +13,11 @@ object Memory:
   /** the room a mapped model's pages have (the OS's file cache and what is free), bytes */
   def room: Long = _root_.mlx.Mlx.memoryRoom
 
+  /** the room a model loaded already has: what is free and its own memory (MLX's active, at most the model's size) —
+   * its pages are its, not free; counted alone they read as a lack (Qwen3.6-35B whole: room 6–14 GB for 20.4 after
+   * its first request, so it was reloaded with hot experts each time — its cache lost, its drafts off) */
+  def roomWith(room: Long, held: Long, bytes: Long): Long = room + math.max(0L, math.min(held, bytes))
+
   /** the experts a layer a mixture of experts of `bytes` should keep, given the room and the pressure: whole (0) when
    * it fits — with a tenth to spare, no pressure; 64 a layer when it does not; 32 when not half of it does, or the
    * pressure is critical. (The pressure alone said normal while others' compressed memory left 16.7 GB of 38 for a

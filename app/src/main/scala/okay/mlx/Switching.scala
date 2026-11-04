@@ -60,7 +60,8 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
    * model under pressure: a warning (nothing to keep apart) */
   private def fitMemory(): Unit =
     val p = Memory.pressure
-    val room = Memory.room
+    // the model's own memory counted as its room (a reload frees it first)
+    val room = Memory.roomWith(Memory.room, mlx(_root_.mlx.Mlx.activeMemory), current.bytes)
     val tight = p >= 2 || room < current.bytes + current.bytes / 10
     if !current.mixture then
       if tight && !warned then

@@ -92,6 +92,16 @@ class MemorySuite extends munit.FunSuite:
     assertEquals(Memory.slotsWanted(64, 20 * gb, 25 * gb, 1, 30 * minute), 0)
     assertEquals(Memory.slotsWanted(64, 20 * gb, 23 * gb, 1, 30 * minute), 64)    // not a fifth to spare
     assertEquals(Memory.slotsWanted(0, 20 * gb, 17 * gb, 1, 0), 64)
+  test("a model loaded counts its own memory as its room; real pressure, or nothing to spare, still makes it hot"):
+    val model = 204L * gb / 10 // Qwen3.6-35B-A3B-4bit
+    // whole, its own 20 GB in, 6 GB free: stays whole (its own not counted, it was reloaded hot after each request)
+    assertEquals(Memory.slotsWanted(0, model, Memory.roomWith(6 * gb, 20 * gb, model), 1, minute), 0)
+    assertEquals(Memory.slotsWanted(0, model, 6 * gb, 1, minute), 32)
+    assertEquals(Memory.slotsWanted(0, model, Memory.roomWith(6 * gb, 20 * gb, model), 2, minute), 64)
+    assertEquals(Memory.slotsWanted(0, model, Memory.roomWith(gb / 2, 20 * gb, model), 1, minute), 64)
+    assertEquals(Memory.roomWith(gb, 25 * gb, model), gb + model) // MLX's caches beyond the model: not its room
+    // hot, its 6 GB counted: whole again after ten easy minutes
+    assertEquals(Memory.slotsWanted(64, model, Memory.roomWith(19 * gb, 6 * gb, model), 1, 11 * minute), 0)
   test("the machine tells its pressure and what is free"):
     assert(Set(1, 2, 4).contains(Memory.pressure), Memory.pressure.toString)
     assert(Memory.freePercent >= 0 && Memory.freePercent <= 100)
