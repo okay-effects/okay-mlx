@@ -3,7 +3,7 @@ package okay.mlx
 import java.nio.file.Path
 import java.util.concurrent.{Callable, ExecutionException, Executors}
 import okay.llm.{Ask, Llm, Timing}
-import mlx.llm.{Adaptable, Chat, Lora, Model, PrefixCache, PrefixStore, Sampling, Session}
+import mlx.llm.{Adaptable, Chat, Lora, Model, PrefixCache, PrefixStore, Quote, Sampling, Session}
 
 /** okay-llm's model on Apple's MLX (mlx-scala): the conversation through the model's own chat template — a
  * `Llm.Backend`; `Llm.on(backend)` handles the `Llm` effect. The messages pass as they are: okay-llm and mlx-scala
@@ -62,8 +62,15 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
     // a prompt's prefixes kept across requests: an agent's system prompt, tools and the conversation so far
     // kept too: the state after the answer and after a tool call's opener (the next turn begins there); the model's
     // own drafts when it has a draft layer (Settings.drafts), else guesses from the text
+    // EXACT QUOTES when asked (okay_quote, okay-inlay specs/quotes.md): between the markers every token continues
+    // a span of the sources given — each tokenized alone, a blank line between — or of the prompt
+    private val quote: Quote | Null = ask.quote.fold(null) { q =>
+      val source = if q.sources.isEmpty then tokens
+        else q.sources.map(chat.tokenizer.encode).reduce((a, b) => a ++ chat.tokenizer.encode("\n\n") ++ b)
+      Quote(chat.tokenizer, source, q.open, q.close)
+    }
     private val session = Session(model, tokens, ask.maxTokens, chat.stops, prefixes, chat.marks(tokens),
-      sampling(ask), guesses, anchors = chat.anchors, drafts = drafts)
+      sampling(ask), guesses, port = quote, anchors = chat.anchors, drafts = drafts)
     private val stream = chat.tokenizer.Stream()
     private val sb = new StringBuilder
     def next(): Option[String] = mlx(session.next().map { t =>
