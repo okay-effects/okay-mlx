@@ -5,7 +5,7 @@ import scala.scalanative.build.*
 
 ThisBuild / scalaVersion := "3.3.8"
 ThisBuild / organization := "io.github.okay-effects"
-ThisBuild / version := "0.1.0"
+ThisBuild / version := "0.1.1"
 ThisBuild / scalacOptions ++= Seq("-deprecation", "-feature", "-unchecked", "-Wunused:imports,privates,locals")
 ThisBuild / resolvers ++= Seq("mlx-scala" at "https://sergey-scherbina.github.io/mlx-scala/maven",
   "okay-llm" at "https://okay-effects.github.io/okay-llm/maven",
@@ -30,6 +30,7 @@ ThisBuild / Compile / packageDoc / publishArtifact := false
 val nativeLib = sys.env.get("MLX_SCALA_LIB").map(file).getOrElse(file("../mlx-scala/native-lib/out/lib"))
   .getAbsoluteFile
 val mlxScala = "0.1.0"
+val macosTarget = sys.env.getOrElse("MACOSX_DEPLOYMENT_TARGET", "14.0")
 
 val jvmNative = Seq(
   Test / fork := true,
@@ -38,7 +39,8 @@ val jvmNative = Seq(
   run / connectInput := true)
 val nativeLinking = Seq(
   nativeConfig ~= (_.withMode(Mode.releaseFast).withLTO(LTO.none).withEmbedResources(true)
-    .withLinkingOptions(Seq(s"-L$nativeLib", "-lmlxc", s"-Wl,-rpath,$nativeLib",
+    .withCompileOptions(_ :+ s"-mmacosx-version-min=$macosTarget")
+    .withLinkingOptions(Seq(s"-mmacosx-version-min=$macosTarget", s"-L$nativeLib", "-lmlxc", s"-Wl,-rpath,$nativeLib",
       // installed (install.sh): the libraries in ../lib beside bin/okay-mlx
       "-Wl,-rpath,@executable_path/../lib"))))
 

@@ -35,6 +35,39 @@ The release's Scala Native binary and MLX's libraries in ~/.okay-mlx (the binary
 `okay-mlx` in ~/.local/bin: `ask`, `bench`, `serve [port]`, `service install [model] [port] | uninstall | status`
 (a LaunchAgent; its log ~/.okay-mlx/serve.log). Models from the HuggingFace cache (`hf download …`).
 
+### macOS control panel
+
+[Download the macOS app](https://github.com/okay-effects/okay-mlx/releases/download/v0.1.1/okay-mlx-desktop-macos-arm64.zip).
+Unzip it, move `okay-mlx.app` to Applications, and open it. The current server release requires Apple Silicon and
+macOS 14.0 or later. This desktop build is ad-hoc signed and has not been notarized by Apple. If macOS blocks
+the first launch, read [Apple's guidance](https://support.apple.com/102445) before deciding to open it.
+
+To build the app from source with the Swift 6 toolchain:
+
+```sh
+desktop/build.sh
+open target/desktop/okay-mlx.app
+```
+
+Create the downloadable ZIP and its SHA-256 checksum with `desktop/package.sh`.
+The server archive is built by `scripts/package-server.sh` using mlx-scala's `native-lib/okm.c`
+(`MLX_SCALA_SOURCE` defaults to `../mlx-scala`), mlx-c v0.8.0 and MLX v0.32.4. Both the native code and Metal
+kernels target macOS 14 by default. Override `MACOSX_DEPLOYMENT_TARGET` to build for another deployment target.
+
+The panel uses the same LaunchAgent as the CLI. It shows API status, the active model, available models, and the
+latest service log. Stop unloads the agent for the current login. Turning off autostart stops the service and
+disables it for future logins. Start enables autostart if it was disabled.
+
+On first launch, Install server downloads the Apple Silicon release from `okay-effects/okay-mlx` on GitHub,
+checks its SHA-256 digest, installs its executable and libraries under `~/.okay-mlx`, downloads the startup model
+if needed, and starts the LaunchAgent. Models can also be downloaded by Hugging Face repository ID from the Models
+tab, without a separate `hf` installation. Downloads show progress and can be cancelled. Retrying reuses completed
+files, and only complete snapshots appear in the model cache. The cache follows the service's `HF_HUB_CACHE` /
+`HF_HOME` configuration, with `~/.cache/huggingface/hub` as the default.
+
+The interface follows the macOS language preference and is available in English, Ukrainian, and Russian.
+The Resources tab shows live process memory footprint, CPU and disk I/O, and the Mac's memory pressure and swap usage.
+
 A model's sampling, the owner's: ~/.config/okay-mlx/models.json (or `OKAY_MLX_MODELS`), by model, `"*"` for all —
 over the model's generation_config.json, under a request's own fields; read when a model loads:
 
