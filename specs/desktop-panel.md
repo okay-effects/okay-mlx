@@ -24,7 +24,9 @@ the models, the clients. This spec says what "managing models" means here, what 
   `~/.config/opencode/opencode.jsonc` — JSONC edited in place, only the `okay-mlx` block, backup `.okay-mlx.bak`;
   connection lines). en/ru/uk. Weight files validated through their HF symlinks.
 
-## 3. Next (in order; SPRINT.md holds the steps)
+## 3. Next (in order; SPRINT.md holds the steps and outcomes)
+
+Status 2026-11-14: 3.1, 3.3–3.6 built and checked; 3.2 built, waiting for the owner to see the menu bar item.
 
 ### 3.1 Find models on Hugging Face
 A search box over `https://huggingface.co/api/models` (author `mlx-community` by default, any author allowed),
