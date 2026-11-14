@@ -33,5 +33,12 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   node + cli.js `connect-url --relay --json --port 3000` → connectUrl/expiresAt/fingerprint → QR (CIQRCodeGenerator,
   320 pt + white border: the link is ~1 kB, a dense code). /api/config/reload exists (restarts managed opencode
   only) — not needed now. Pairing checked by a harness; the QR not yet scanned by the iPhone (owner).
-- [ ] **chamber-env** — clean OpenChamber's LaunchAgent environment, backup, restart once (spec §3.5).
+- [x] **chamber-env** — clean OpenChamber's LaunchAgent environment, backup, restart once (spec §3.5).
+  OUTCOME 2026-11-14: 31 variables removed from ~/Library/LaunchAgents/dev.openchamber.web.plist (CLAUDECODE,
+  CLAUDE_CODE_* incl. a messaging token, ROZUM_MEETING_TOKEN, GIT_EDITOR=true, AI_AGENT, GHOSTTY_*, terminal and
+  XPC ones, SSH_AUTH_SOCK); kept PATH, HOME, LANG, JAVA_HOME, SDKMAN_*, HOMEBREW_*, OPENCODE_BINARY,
+  OPENCHAMBER_UI_PASSWORD. Backup ~/.config/openchamber/dev.openchamber.web.plist.before-clean-20261114 (outside
+  LaunchAgents). bootout+bootstrap once; HTTP 200, the process has none of them, 9 okay-mlx models offered. Cause:
+  the service was installed from inside an agent session (its environment copied) — reinstalling it from an agent
+  would bring them back.
 - [ ] **release** — rebuild + re-upload v0.1.1 server archive and app zip, move the tag (spec §3.6).
