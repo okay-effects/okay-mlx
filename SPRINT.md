@@ -24,7 +24,14 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   OUTCOME 2026-11-14: /admin/status "generations" [model, client, prompt_tokens (-1 in prefill), cached, tokens,
   millis, per_second]; client = User-Agent's first product (Admin.clientOf). Seen live: opencode 173→363 tokens
   ~117 tok/s; the Overview lists them, the hub polls every 1 s while any runs.
-- [ ] **chamber-closer** — OpenChamber: reload without restart if it can, default model, iPhone pairing QR (spec
+- [x] **chamber-closer** — OpenChamber: reload without restart if it can, default model, iPhone pairing QR (spec
   §3.4). First investigate OpenChamber 2.5.3 / opencode 2.2.5 routes (npm -g @openchamber/web sources).
+  OUTCOME 2026-11-14: no restart needed — opencode 2.2.5 watches opencode.jsonc (OpenChamber's GET /api/model
+  listed the 9 synced models at once). ChamberAPI (Clients.swift): POST /auth/session {password from
+  ~/.config/openchamber/ui-password.txt} → cookie; GET /api/model (okay-mlx models it offers: "offers 9 of 9");
+  GET/PUT /api/config/settings {defaultModel: "okay-mlx/<id>"} (picker on the Clients tab); pairing = OpenChamber's
+  node + cli.js `connect-url --relay --json --port 3000` → connectUrl/expiresAt/fingerprint → QR (CIQRCodeGenerator,
+  320 pt + white border: the link is ~1 kB, a dense code). /api/config/reload exists (restarts managed opencode
+  only) — not needed now. Pairing checked by a harness; the QR not yet scanned by the iPhone (owner).
 - [ ] **chamber-env** — clean OpenChamber's LaunchAgent environment, backup, restart once (spec §3.5).
 - [ ] **release** — rebuild + re-upload v0.1.1 server archive and app zip, move the tag (spec §3.6).

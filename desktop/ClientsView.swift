@@ -1,4 +1,5 @@
 import AppKit
+import CoreImage
 import SwiftUI
 
 /// The clients that use the server: OpenChamber (opencode's web and iPhone client) and opencode itself, which list
@@ -18,10 +19,11 @@ struct ClientsView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+        .sheet(item: $library.pairing) { link in PairingSheet(link: link) }
         .confirmationDialog("Restart OpenChamber?", isPresented: $confirmRestart) {
             Button("Restart") { library.restartChamber() }
         } message: {
-            Text("Its opencode reads the new model list on start. Running sessions are interrupted.")
+            Text("OpenChamber and its opencode start again. Running sessions are interrupted.")
         }
     }
 
@@ -42,8 +44,36 @@ struct ClientsView: View {
                 Button("Open OpenChamber") { NSWorkspace.shared.open(library.chamber.url) }
                     .buttonStyle(.borderedProminent)
                     .disabled(!library.chamber.running)
+                Button("Pair a device…") { library.pair() }
+                    .disabled(!library.chamber.running || library.working != nil)
+                    .help("A single-use link and QR code for the OpenChamber iPhone app, through the relay.")
                 Button("Restart…") { confirmRestart = true }
                     .disabled(!library.chamber.installed || library.working != nil)
+            }
+            if let api = library.chamberAPI {
+                let wanted = library.offered.map(\.id)
+                let all = Set(wanted).isSubset(of: Set(api.models))
+                Label(String(localized: "OpenChamber offers \(api.models.count) of \(wanted.count) okay-mlx models"),
+                      systemImage: all ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .font(.callout).foregroundStyle(all ? .green : .orange)
+                Picker("Default model for new sessions", selection: Binding(
+                    get: { api.defaultModel ?? "" },
+                    set: { value in
+                        library.setChamberDefault(
+                            value.isEmpty ? nil : String(value.dropFirst(OpenCode.provider.count + 1)))
+                    }
+                )) {
+                    Text("OpenCode's own choice").tag("")
+                    ForEach(library.offered, id: \.id) { model in
+                        Text(model.title).tag("\(OpenCode.provider)/\(model.id)")
+                    }
+                    if let other = api.defaultModel, !other.isEmpty, !other.hasPrefix(OpenCode.provider + "/") {
+                        Text(other).tag(other)
+                    }
+                }
+                .disabled(library.working != nil)
+            } else if let error = library.chamberAPIError {
+                Text(error).font(.caption).foregroundStyle(.orange)
             }
             Text("""
                 OpenChamber runs opencode, which offers the models of its "okay-mlx" provider. \
@@ -91,7 +121,7 @@ struct ClientsView: View {
             Text("""
                 The panel writes only the "okay-mlx" provider (names, tool calls, each model's context so opencode \
                 compacts before it overflows); the rest of the file stays as you wrote it. A backup of the original \
-                is kept beside it (.okay-mlx.bak). Restart OpenChamber to see changes there.
+                is kept beside it (.okay-mlx.bak). OpenChamber picks the change up within seconds.
                 """)
                 .font(.caption).foregroundStyle(.secondary)
         }
@@ -136,5 +166,53 @@ struct ClientsView: View {
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// A pairing link as a QR code for the OpenChamber iPhone app: single-use, expiring.
+struct PairingSheet: View {
+    let link: ChamberAPI.Pairing
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 14) {
+            Text("Pair a device").font(.title3.weight(.semibold))
+            if let image = Self.qr(link.url) {
+                // a long link makes a dense code: shown large, with the white border scanners need
+                Image(nsImage: image).interpolation(.none).resizable().frame(width: 320, height: 320)
+                    .padding(16).background(Color.white)
+            }
+            Text("Scan with the OpenChamber app on the iPhone (Settings → Remote Instances → Add).")
+                .font(.callout).multilineTextAlignment(.center)
+            if let fingerprint = link.fingerprint {
+                Text("Fingerprint: \(fingerprint)").font(.caption.monospaced()).foregroundStyle(.secondary)
+            }
+            if let expires = link.expires {
+                Text("Single-use; expires at \(expires.formatted(date: .omitted, time: .shortened)).")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("Copy link") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(link.url, forType: .string)
+                }
+                Spacer()
+                Button("Done") { dismiss() }.buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(22)
+        .frame(width: 400)
+    }
+
+    static func qr(_ text: String) -> NSImage? {
+        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
+        filter.setValue(Data(text.utf8), forKey: "inputMessage")
+        filter.setValue("M", forKey: "inputCorrectionLevel")
+        guard let output = filter.outputImage else { return nil }
+        let scaled = output.transformed(by: CGAffineTransform(scaleX: 8, y: 8))
+        let rep = NSCIImageRep(ciImage: scaled)
+        let image = NSImage(size: rep.size)
+        image.addRepresentation(rep)
+        return image
     }
 }

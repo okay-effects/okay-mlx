@@ -251,3 +251,120 @@ struct OpenChamber: Sendable {
         return (task.terminationStatus, String(decoding: data, as: UTF8.self))
     }
 }
+
+/// OpenChamber's own API (spec §3.4), as the panel uses it: the models its opencode offers now, its default model
+/// for new sessions, and a pairing link for the iPhone app. Signed in with the UI password OpenChamber keeps in
+/// ~/.config/openchamber/ui-password.txt (local, never sent elsewhere).
+struct ChamberAPI: Sendable {
+    let base: URL
+    let home: URL
+
+    private var session: URLSession {
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 8
+        return URLSession(configuration: configuration)
+    }
+
+    /// A signed-in session (its cookie kept in the ephemeral session's storage).
+    private func signedIn() async throws -> URLSession {
+        let session = self.session
+        let file = home.appending(path: ".config/openchamber/ui-password.txt")
+        guard let password = try? String(contentsOf: file, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines), !password.isEmpty else { return session }
+        var request = URLRequest(url: base.appending(path: "auth/session"))
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try JSONSerialization.data(withJSONObject: ["password": password])
+        let (_, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw InstallFailure(String(localized: "OpenChamber did not accept its UI password."))
+        }
+        return session
+    }
+
+    private func json(_ session: URLSession, _ method: String, _ path: String, _ body: [String: Any]? = nil)
+        async throws -> Any {
+        var request = URLRequest(url: base.appending(path: path))
+        request.httpMethod = method
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        }
+        let (data, response) = try await session.data(for: request)
+        guard (response as? HTTPURLResponse)?.statusCode == 200 else {
+            throw InstallFailure("OpenChamber \(path): HTTP \((response as? HTTPURLResponse)?.statusCode ?? 0)")
+        }
+        return try JSONSerialization.jsonObject(with: data)
+    }
+
+    struct State: Sendable {
+        /// The okay-mlx models OpenChamber's opencode offers now.
+        var models: [String] = []
+        /// Its default model for new sessions ("provider/model"), if set.
+        var defaultModel: String?
+    }
+
+    func state() async throws -> State {
+        let session = try await signedIn()
+        let models = try await json(session, "GET", "api/model") as? [String: Any]
+        let ids = (models?["data"] as? [[String: Any]] ?? []).compactMap { model -> String? in
+            model["providerID"] as? String == OpenCode.provider ? model["modelID"] as? String : nil
+        }
+        let settings = try await json(session, "GET", "api/config/settings") as? [String: Any]
+        return State(models: ids, defaultModel: settings?["defaultModel"] as? String)
+    }
+
+    /// The default model of new sessions: an okay-mlx model, or none (OpenCode's own choice).
+    func setDefault(_ model: String?) async throws {
+        let session = try await signedIn()
+        _ = try await json(session, "PUT", "api/config/settings",
+                           ["defaultModel": model.map { "\(OpenCode.provider)/\($0)" } ?? ""])
+    }
+
+    struct Pairing: Sendable, Identifiable {
+        let url: String
+        let expires: Date?
+        let fingerprint: String?
+        var id: String { url }
+    }
+
+    /// A single-use pairing link for another OpenChamber client (the iPhone app), the relay included so it works
+    /// away from this network — what `openchamber connect-url --relay` prints, run with OpenChamber's own node.
+    func pair() async throws -> Pairing {
+        let launcher = home.appending(path: ".config/openchamber/bin/OpenChamber")
+        guard let script = try? String(contentsOf: launcher, encoding: .utf8),
+              let line = script.split(separator: "\n").first(where: { $0.hasPrefix("exec ") }) else {
+            throw InstallFailure(String(localized: "OpenChamber's launcher was not found."))
+        }
+        let quoted = line.split(separator: "'", omittingEmptySubsequences: false).enumerated()
+            .filter { $0.offset % 2 == 1 }.map { String($0.element) }
+        guard quoted.count >= 2 else { throw InstallFailure(String(localized: "OpenChamber's launcher was not found.")) }
+        let port = base.port ?? 3000
+        let output = try await Task.detached { () throws -> Data in
+            let task = Process()
+            let pipe = Pipe()
+            task.executableURL = URL(fileURLWithPath: quoted[0])
+            task.arguments = [quoted[1], "connect-url", "--relay", "--json", "--port", String(port)]
+            task.standardOutput = pipe
+            task.standardError = FileHandle.nullDevice
+            try task.run()
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            task.waitUntilExit()
+            return data
+        }.value
+        guard let object = try JSONSerialization.jsonObject(with: output) as? [String: Any],
+              let url = object["connectUrl"] as? String else {
+            throw InstallFailure(String(localized: "OpenChamber did not make a pairing link."))
+        }
+        let expires = (object["expiresAt"] as? String).flatMap { ISO8601DateFormatter.withFractions.date(from: $0) }
+        return Pairing(url: url, expires: expires, fingerprint: object["fingerprint"] as? String)
+    }
+}
+
+extension ISO8601DateFormatter {
+    static var withFractions: ISO8601DateFormatter {
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter
+    }
+}

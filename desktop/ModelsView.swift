@@ -9,6 +9,10 @@ final class LibraryModel: ObservableObject {
     @Published private(set) var adminError: String?
     @Published private(set) var openCode = OpenCode.State()
     @Published private(set) var chamber = OpenChamber.State()
+    /// What OpenChamber's own API says (its models, its default), when it runs and lets the panel in.
+    @Published private(set) var chamberAPI: ChamberAPI.State?
+    @Published private(set) var chamberAPIError: String?
+    @Published var pairing: ChamberAPI.Pairing?
     @Published private(set) var working: String?
     @Published private(set) var hidden: Set<String> = []
     @Published private(set) var unloadAfter = 0
@@ -46,6 +50,17 @@ final class LibraryModel: ObservableObject {
             }.value
             : (models, openCode, self.chamber)
         if stale { lastScan = Date() }
+        if stale && chamber.running {
+            do {
+                chamberAPI = try await ChamberAPI(base: chamber.url, home: home).state()
+                chamberAPIError = nil
+            } catch {
+                chamberAPI = nil
+                chamberAPIError = error.localizedDescription
+            }
+        } else if !chamber.running {
+            chamberAPI = nil
+        }
         let scanned = found
         let file = settings
         let entries = file.read()
@@ -132,6 +147,19 @@ final class LibraryModel: ObservableObject {
         let home = home
         act(quietly ? nil : String(localized: "Updating opencode…")) { [endpoint] in
             try await Task.detached { try OpenCode(home: home).sync(offered, endpoint: endpoint) }.value
+        }
+    }
+
+    func setChamberDefault(_ model: String?) {
+        let api = ChamberAPI(base: chamber.url, home: home)
+        act(nil) { try await api.setDefault(model) }
+    }
+
+    func pair() {
+        let api = ChamberAPI(base: chamber.url, home: home)
+        act(String(localized: "Making a pairing link…")) { [weak self] in
+            let link = try await api.pair()
+            await MainActor.run { self?.pairing = link }
         }
     }
 
