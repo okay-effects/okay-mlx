@@ -189,3 +189,13 @@
 "Anthropic API (Claude Code)" = "Anthropic API (Claude Code)";
 "A request naming a downloaded model loads it in place of the one in memory; other names use the model loaded now." = "Запрос, называющий скачанную модель, загружает её вместо модели в памяти; другие имена используют загруженную сейчас.";
 "Copy" = "Копировать";
+"Downloaded" = "Скачанные";
+"Find on Hugging Face" = "Найти на Hugging Face";
+"Search Hugging Face" = "Поиск на Hugging Face";
+"Author" = "Автор";
+"Everyone" = "Все";
+"Search" = "Найти";
+"%@ downloads" = "%@ скачиваний";
+"Only the architectures okay-mlx runs are shown: Qwen3, Qwen3.5, Qwen3.6, Qwen3.8." = "Показаны только архитектуры, которые запускает okay-mlx: Qwen3, Qwen3.5, Qwen3.6, Qwen3.8.";
+"Hugging Face search failed. Check the connection." = "Поиск на Hugging Face не удался. Проверьте соединение.";
+"Qwen3.5, Qwen3.6 35B, 8bit…" = "Qwen3.5, Qwen3.6 35B, 8bit…";

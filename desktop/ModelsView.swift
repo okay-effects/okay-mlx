@@ -154,12 +154,22 @@ struct ModelsView: View {
     @ObservedObject var library: LibraryModel
     let completed: @MainActor () async -> Void
     @State private var editing: ModelInfo?
+    // OKAY_MLX_PANEL_FIND opens the search (screenshots, scripts)
+    @State private var finding = ProcessInfo.processInfo.environment["OKAY_MLX_PANEL_FIND"] != nil
     @State private var deleting: ModelInfo?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ModelDownloadView(status: status, busy: busy, installer: installer, completed: completed)
-            Divider()
+            Picker("Models", selection: $finding) {
+                Text("Downloaded").tag(false)
+                Text("Find on Hugging Face").tag(true)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            if finding {
+                CatalogView(status: status, busy: busy, installer: installer, library: library, completed: completed)
+            } else {
             HStack {
                 Text("Downloaded models").font(.headline)
                 Spacer()
@@ -181,6 +191,7 @@ struct ModelsView: View {
             }
             Text("Hidden models stay on disk and still load when a client names them; clients just do not list them.")
                 .font(.caption).foregroundStyle(.secondary)
+            }
         }
         .sheet(item: $editing) { model in
             ModelSettingsSheet(model: model, library: library, loaded: library.admin?.loaded?.model == model.id)
@@ -278,10 +289,19 @@ struct ModelsView: View {
             .background(Color.secondary.opacity(0.15), in: Capsule())
     }
 
-    @ViewBuilder
     private func fit(_ model: ModelInfo, loaded: Bool) -> some View {
-        let room = library.admin?.room
-        switch Library.fit(model, room: room) {
+        FitBadge(weights: model.weights, mixture: model.mixture, room: library.admin?.room)
+    }
+}
+
+/// Whether a model of these weights fits the memory free now (the server's room), as a small tag.
+struct FitBadge: View {
+    let weights: Int64
+    let mixture: Bool
+    let room: Int64?
+
+    var body: some View {
+        switch Library.fit(weights, mixture: mixture, room: room) {
         case .whole:
             tag(String(localized: "fits")).foregroundStyle(.green)
         case .hotExperts:
@@ -296,6 +316,11 @@ struct ModelsView: View {
         case .unknown:
             EmptyView()
         }
+    }
+
+    private func tag(_ text: String) -> some View {
+        Text(text).font(.caption2.weight(.medium)).padding(.horizontal, 6).padding(.vertical, 2)
+            .background(Color.secondary.opacity(0.15), in: Capsule())
     }
 }
 

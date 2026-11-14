@@ -3,11 +3,14 @@
 Queue, in order (the owner, 2026-11-14: "делай всё по порядку"). Design: specs/desktop-panel.md §3.
 `[~]` in progress, `[x]` done (with the commit and the outcome).
 
-- [ ] **hf-search** — find models on Hugging Face in the Models tab (spec §3.1). New `desktop/Catalog.swift`
+- [x] **hf-search** — find models on Hugging Face in the Models tab (spec §3.1). New `desktop/Catalog.swift`
   (search request, size from `safetensors.parameters`, arch filter), a search field + results list in
   `ModelsView.swift` above "Downloaded models"; Download reuses `InstallModel.model`. Done when: searching "Qwen3.5"
   lists mlx-community models with size, context-free, a fit badge, "downloaded" on the ones there; non-Qwen results
   are left out.
+  OUTCOME 2026-11-14: Models tab → "Find on Hugging Face" (Catalog.swift, one request with config+safetensors
+  expanded). HF counts quantized U32 two ways by repo (logical weights or packed words); the BF16/U32 ratio picks
+  the formula — sizes exact within 0.2% (35B-A3B-4bit 20.39 vs 20.43 GB on disk; 4B both repos 3.03 GB).
 - [ ] **menu-bar** — `MenuBarExtra` (spec §3.2). Move `PanelModel`/`LibraryModel`/`InstallModel` to the `App`
   struct, pass them in; menu: state, model in memory, switch list, Unload, Open panel, Open OpenChamber. Done when:
   closing the window keeps the menu, switching from the menu loads the model (status shows it).

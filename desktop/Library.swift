@@ -51,12 +51,14 @@ enum Library {
         return name.replacingOccurrences(of: "-", with: " ")
     }
 
-    static func fit(_ model: ModelInfo, room: Int64?) -> Fit {
+    static func fit(_ model: ModelInfo, room: Int64?) -> Fit { fit(model.weights, mixture: model.mixture, room: room) }
+
+    static func fit(_ weights: Int64, mixture: Bool, room: Int64?) -> Fit {
         let physical = Int64(ProcessInfo.processInfo.physicalMemory)
-        if model.weights > physical * 3 / 4 && !model.mixture { return .tooLarge }
+        if weights > physical * 3 / 4 && !mixture { return .tooLarge }
         guard let room else { return .unknown }
-        if model.weights + model.weights / 10 <= room { return .whole }
-        return model.mixture ? .hotExperts : .mayPage
+        if weights + weights / 10 <= room { return .whole }
+        return mixture ? .hotExperts : .mayPage
     }
 
     private static func newestSnapshot(_ repository: URL) -> URL? {
