@@ -41,4 +41,7 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   LaunchAgents). bootout+bootstrap once; HTTP 200, the process has none of them, 9 okay-mlx models offered. Cause:
   the service was installed from inside an agent session (its environment copied) — reinstalling it from an agent
   would bring them back.
-- [ ] **release** — rebuild + re-upload v0.1.1 server archive and app zip, move the tag (spec §3.6).
+- [x] **release** — rebuild + re-upload v0.1.1 server archive and app zip, move the tag (spec §3.6).
+  OUTCOME 2026-11-14: v0.1.1 assets replaced (server 7d8f6bef…, app e2c8774c…, SHA256SUMS both), tag moved
+  3c4bb2a → aeb546e. Gotcha: build with MLX_C_SOURCE=~/work/my/mlx-scala/native-lib/src — the cached CMake build in
+  target/macos14 was made from it; the default (a fresh clone in target/macos14/src) fails "source does not match".
