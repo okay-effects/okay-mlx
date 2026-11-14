@@ -15,8 +15,9 @@ import mlx.llm.Models
   val platform = if System.getProperty("java.vm.name", "").contains("Scala Native") then "native" else "jvm"
   val stderr = (l: Level, m: String) => System.err.println(s"[$l] $m")
   // the gateway: the model a request names loaded in place of the one there (Switching); ask, bench: MLX_MODEL's
+  lazy val switching = Switching(repo)
   val backend: Llm.Backend =
-    if args.headOption.contains("serve") then Switching(repo)
+    if args.headOption.contains("serve") then switching
     else
       val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
       stderr(Level.Info, s"$repo at $dir")
@@ -36,6 +37,8 @@ import mlx.llm.Models
     case "serve" :: rest =>
       type Gw[X] = (Llm + Http + Clock + Fresh + Log)[X]
       Server.run(rest.headOption.map(_.toInt).getOrElse(8090)) { (req, out) =>
+        // the gateway managed (Admin): the model loaded, unloaded, the state read
+        if Admin.handles(req) then run(Http.socket(out)(Admin.route[Http](req, switching))) else
         run(Log.to(stderr, Level.Info)(Fresh.from(0)(Clock.system(Http.socket(out)(
           Llm.on(backend)(Gateway.route[Gw](req)))))))
       }

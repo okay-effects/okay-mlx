@@ -7,34 +7,64 @@ import mlx.llm.Models
  * (`mlx-community/Qwen3.5-9B-MLX-4bit`) — loaded in place of the one there, ONE in memory at a time; any other name
  * (Claude Code's `claude-…`, rozum's `claude-rozum-…` for its small requests) the one there now, so those never
  * switch it. A switch waits for the generations on the old model to end — one with no token asked for a minute
- * (its client gone) closed — then frees the old model before loading the new. All on one MLX thread */
+ * (its client gone) closed — then frees the old model before loading the new. All on one MLX thread.
+ *
+ * MANAGED (`Admin`): a model loaded or reloaded at once (`switchTo`), the memory given back (`unload`: none in memory,
+ * the next request loads the one it names, else the last one), unloaded by itself after `Settings.unloadAfter`
+ * minutes with nothing asked; its state read without waiting for a load (`state`) */
 final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThread.shared) extends Llm.Backend:
-  private var current: MlxBackend = load(first)
+  private var current: MlxBackend | Null = null
+  // the model to load when none is: the one there last (and its adapter)
+  @volatile private var last: (String, Option[String]) = (first, None)
   private val running = scala.collection.mutable.LinkedHashSet.empty[Running]
-  private var switching = false
+  @volatile private var switching = false
+  @volatile private var loading: Option[String] = None
 
   private var changed = System.nanoTime()
   private var warned = false
+  @volatile private var used = System.nanoTime()
+  @volatile private var lastTiming: Option[(Timing, Long)] = None
+  @volatile private var snapshot: Switching.Loaded | Null = null
+
+  // the first model: a model not there (deleted since) leaves the gateway up with none loaded
+  current = try load(first) catch case e: Exception =>
+    System.err.println(s"[Warn] $first did not load: ${e.getMessage}")
+    null
 
   private def load(repo: String, hot: Option[Int] = None): MlxBackend =
     val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
     System.err.println(s"[Info] loading $repo")
-    changed = System.nanoTime()
-    val b = MlxBackend.open(repo, dir, mlx, hot)
-    System.err.println(f"[Info] $repo loaded: MLX holds ${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
-    b
+    loading = Some(repo)
+    try
+      changed = System.nanoTime()
+      val b = MlxBackend.open(repo, dir, mlx, hot)
+      System.err.println(f"[Info] $repo loaded: MLX holds ${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
+      last = (repo, b.adapter)
+      snapshot = Switching.Loaded(repo, b.adapter, b.bytes, b.mixture, b.slots, System.currentTimeMillis())
+      b
+    finally loading = None
 
-  def name: String = synchronized(current.name + current.adapter.fold("")("+" + _))
-  override def models: Vector[String] = synchronized {
-    val all = Models.cached().flatMap(m => m +: Adapters.of(m).map(a => s"$m+$a"))
+  private def free(): Unit =
+    val c = current
+    if c != null then
+      last = (c.name, c.adapter)
+      c.close()
+      current = null
+      snapshot = null
+      System.err.println(f"[Info] ${c.name} closed: MLX holds ${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
+
+  def name: String =
+    val (m, a) = Option(snapshot).fold(last)(s => (s.model, s.adapter))
+    m + a.fold("")("+" + _)
+  override def models: Vector[String] =
+    val all = Models.cached().filterNot(Settings.hidden(_)).flatMap(m => m +: Adapters.of(m).map(a => s"$m+$a"))
     name +: all.filterNot(_ == name)
-  }
 
   /** the model for a request and its adapter: the one it names if that one loads (`<repo>+<adapter>`: with an
-   * adapter that is there), else the one there now as it is */
+   * adapter that is there), else the one there now (or last) as it is */
   private def wanted(ask: Ask): (String, Option[String]) =
     ask.model.map(Adapters.split(_)).filter((m, _) => m.contains("/") && Models.cached().contains(m))
-      .getOrElse((current.name, current.adapter))
+      .getOrElse(Option(current).fold(last)(c => (c.name, c.adapter)))
 
   /** the generations running let end (one silent for a minute: its client gone, closed) */
   private def drain(): Unit =
@@ -43,59 +73,113 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       running.filter(r => now - r.last > Switching.abandoned).foreach(_.abandon())
       if running.nonEmpty then wait(1000)
 
+  /** `w` with adapter `a` in memory — loaded, switched to, or (`reload`) loaded again — the generations on another
+   * let end first. Called holding the lock */
+  private def ensure(w: String, a: Option[String], reload: Boolean = false): MlxBackend =
+    while switching do wait(1000)
+    val c = current
+    if c == null || reload || w != c.name || a != c.adapter then
+      switching = true
+      try
+        drain()
+        if current == null || reload || w != current.nn.name then
+          free()
+          current = load(w)
+        current.nn.use(a)
+        snapshot = snapshot.nn.copy(adapter = a)
+        last = (w, a)
+      finally
+        switching = false
+        notifyAll()
+    current.nn
+
   /** the backend for `ask`, the model switched first if it names another — or its adapter put on or off (the model
    * not loaded again, the generations on it let end first: an adapter is the model's for all of them); held (a
    * generation) until released */
   private def hold(ask: Ask): (MlxBackend, Running) = synchronized {
-    // a switch going on: every request waits for it (no new generation on the old model holds it up)
-    while switching do wait(1000)
     val (w, a) = wanted(ask)
-    if w != current.name || a != current.adapter then
-      switching = true
-      try
-        drain()
-        if w != current.name then
-          current.close()
-          System.err.println(f"[Info] ${current.name} closed: MLX holds " +
-            f"${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
-          current = load(w)
-        current.use(a)
-      finally
-        switching = false
-        notifyAll()
+    ensure(w, a)
     if running.isEmpty then fitMemory()
+    used = System.nanoTime()
     val r = Running()
     running += r
-    (current, r)
+    (current.nn, r)
   }
+
+  /** a model (`<repo>` or `<repo>+<adapter>`) in memory now — or loaded again (`reload`: its settings read anew) */
+  def switchTo(model: String, reload: Boolean): Either[String, String] =
+    val (m, a) = Adapters.split(model)
+    if !Models.cached().contains(m) then Left(s"$m is not in the HuggingFace cache")
+    else if model.contains('+') && a.isEmpty then Left(s"no adapter ${model.drop(model.lastIndexOf('+') + 1)} for $m")
+    else synchronized {
+      try { ensure(m, a, reload); used = System.nanoTime(); Right(name) }
+      catch case e: Exception => Left(s"$m did not load: ${e.getMessage}")
+    }
+
+  /** the model out of memory, its memory given back — unless a generation runs (`force`: they are closed) */
+  def unload(force: Boolean): Either[String, Unit] = synchronized {
+    while switching do wait(1000)
+    if running.nonEmpty && !force then Left(s"${running.size} generation(s) running")
+    else
+      running.toVector.foreach(_.abandon())
+      free()
+      Right(())
+  }
+
+  /** unloaded by itself: nothing asked for `Settings.unloadAfter` minutes (0: never) */
+  private val idle = Thread(() =>
+    while true do
+      Thread.sleep(30000)
+      val after = Settings.unloadAfter
+      if after > 0 && current != null && System.nanoTime() - used > after * 60L * 1000 * 1000 * 1000 then
+        synchronized {
+          if running.isEmpty && !switching && current != null then
+            System.err.println(s"[Info] nothing asked for $after min: the model unloaded")
+            free()
+        }
+  , "okay-mlx-idle")
+  idle.setDaemon(true)
+  idle.start()
+
+  /** THE STATE, read at once (never waiting for a load or a switch) */
+  def state: Switching.State =
+    val t = lastTiming
+    Switching.State(Option(snapshot), last._1, loading, switching, running.size,
+      if loading.nonEmpty || switching then -1L else mlx(_root_.mlx.Mlx.activeMemory),
+      (System.nanoTime() - used) / 1000000000L, t)
 
   /** MEMORY AS IT IS NOW, before a request: a mixture of experts whole under pressure reloaded with its hot experts
    * alone; hot, and memory easy again for ten minutes, whole again — unless the owner set its hot experts. A dense
    * model under pressure: a warning (nothing to keep apart) */
   private def fitMemory(): Unit =
+    val c = current.nn
     val p = Memory.pressure
     // the model's own memory counted as its room (a reload frees it first)
-    val room = Memory.roomWith(Memory.room, mlx(_root_.mlx.Mlx.activeMemory), current.bytes)
-    val tight = p >= 2 || room < current.bytes + current.bytes / 10
-    if !current.mixture then
+    val room = Memory.roomWith(Memory.room, mlx(_root_.mlx.Mlx.activeMemory), c.bytes)
+    val tight = p >= 2 || room < c.bytes + c.bytes / 10
+    if !c.mixture then
       if tight && !warned then
-        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${current.bytes / 1e9}%.1f, pressure $p: " +
-          s"${current.name} may page")
+        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${c.bytes / 1e9}%.1f, pressure $p: " +
+          s"${c.name} may page")
       warned = tight
-    else if Settings.expertSlotsSet(current.name).isEmpty then
-      val want = Memory.slotsWanted(current.slots, current.bytes, room, p, System.nanoTime() - changed)
-      if want != current.slots then
-        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${current.bytes / 1e9}%.1f, pressure $p: " +
-          s"${current.name} " + (if want > 0 then s"reloaded with $want hot experts a layer" else "reloaded whole"))
-        val (name, a) = (current.name, current.adapter)
-        current.close()
+    else if Settings.expertSlotsSet(c.name).isEmpty then
+      val want = Memory.slotsWanted(c.slots, c.bytes, room, p, System.nanoTime() - changed)
+      if want != c.slots then
+        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${c.bytes / 1e9}%.1f, pressure $p: " +
+          s"${c.name} " + (if want > 0 then s"reloaded with $want hot experts a layer" else "reloaded whole"))
+        val (name, a) = (c.name, c.adapter)
+        free()
         current = load(name, Some(want))
-        current.use(a)
+        current.nn.use(a)
+        snapshot = snapshot.nn.copy(adapter = a)
 
   private final class Running:
     @volatile var last: Long = System.nanoTime()
     @volatile var generation: Llm.Generation | Null = null
-    def release(): Unit = Switching.this.synchronized { running -= this; Switching.this.notifyAll() }
+    def release(): Unit = Switching.this.synchronized {
+      running -= this
+      used = System.nanoTime()
+      Switching.this.notifyAll() }
     def abandon(): Unit =
       val g = generation
       if g != null then g.close()
@@ -119,9 +203,19 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       def byStop: Boolean = g.byStop
       def close(): Unit = if !done then
         done = true
+        try lastTiming = Some((g.timing, System.currentTimeMillis())) catch case _: Exception => ()
         g.close()
         r.release()
 
 object Switching:
   /** a generation with no token asked for this long: its client gone */
   val abandoned: Long = 60L * 1000 * 1000 * 1000
+
+  /** the model in memory: its name, adapter, weights' bytes, whether a mixture of experts and its hot experts a
+   * layer (0: whole), when it loaded (ms since the epoch) */
+  final case class Loaded(model: String, adapter: Option[String], bytes: Long, mixture: Boolean, slots: Int,
+      since: Long)
+  /** `loaded`: none when unloaded; `last`: the model the next request loads by default; `loading`: one loading now;
+   * `held`: MLX's active memory (bytes, -1 when the MLX thread is busy); the last generation's timing and when */
+  final case class State(loaded: Option[Loaded], last: String, loading: Option[String], switching: Boolean,
+      running: Int, held: Long, idleSeconds: Long, lastTiming: Option[(Timing, Long)])

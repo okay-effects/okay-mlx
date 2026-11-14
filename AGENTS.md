@@ -18,3 +18,13 @@ converted to mlx-scala's), and `Main` (ask, bench, serve). One crossProject `app
 - The effects, the gateway, the server, the programs are okay-llm's; nothing here but the hardware and the wiring.
 
 Build: `sbt test` (the backend on Qwen3-4B, skipped without it), `sbt "appNative/run serve 8090"`. Lines at most 120.
+
+## Managed (2026-11-14)
+
+- `Admin` (same port, /admin/…): `GET /admin/status` (the model loaded or none, loading, running, MLX memory, the
+  machine's room and pressure, the last generation's speeds), `POST /admin/load {"model", "reload"}`,
+  `POST /admin/unload {"force"}`. `Switching` can hold no model (the next request loads the one it names, else the
+  last); a startup model that does not load leaves the gateway up. `Settings`: `"hidden": true` by model (not in
+  /v1/models), `"*": {"unload_after_minutes": N}` (OKAY_MLX_UNLOAD_AFTER) — unloaded by itself when idle.
+- The desktop app (`desktop/`, SwiftUI, `desktop/build.sh`) manages models over these and the files: the HF cache,
+  `~/.config/okay-mlx/models.json`, the LaunchAgent's MLX_MODEL, and opencode's provider (OpenChamber).

@@ -51,6 +51,16 @@ object Settings:
     Seq(name, "*").flatMap(k => settings.flatMap(_.field(k)).flatMap(_.field("drafts"))).headOption.map(_.int)
       .orElse(sys.env.get("OKAY_MLX_DRAFTS").flatMap(_.toIntOption)).getOrElse(2)
 
+  /** HIDDEN from the clients: `"hidden": true` by model — not in /v1/models (a model asked by name still loads) */
+  def hidden(name: String, settings: Option[Json] = read()): Boolean =
+    settings.flatMap(_.field(name)).flatMap(_.field("hidden")).exists(_ == Json.Bool(true))
+
+  /** UNLOADED BY ITSELF after this many minutes with nothing asked: `"unload_after_minutes"` in `"*"`, else
+   * OKAY_MLX_UNLOAD_AFTER, else 0 (never) — the memory back for the machine's other work */
+  def unloadAfter: Int =
+    read().flatMap(_.field("*")).flatMap(_.field("unload_after_minutes")).map(_.int)
+      .orElse(sys.env.get("OKAY_MLX_UNLOAD_AFTER").flatMap(_.toIntOption)).getOrElse(0)
+
   def read(): Option[Json] =
     val f = file
     if !Files.exists(f) then None
