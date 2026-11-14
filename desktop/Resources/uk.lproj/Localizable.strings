@@ -199,3 +199,6 @@
 "Only the architectures okay-mlx runs are shown: Qwen3, Qwen3.5, Qwen3.6, Qwen3.8." = "Показано лише архітектури, які запускає okay-mlx: Qwen3, Qwen3.5, Qwen3.6, Qwen3.8.";
 "Hugging Face search failed. Check the connection." = "Пошук на Hugging Face не вдався. Перевірте з'єднання.";
 "Qwen3.5, Qwen3.6 35B, 8bit…" = "Qwen3.5, Qwen3.6 35B, 8bit…";
+"Switch model" = "Змінити модель";
+"Panel…" = "Панель…";
+"generating · %lld" = "генерує · %lld";

@@ -11,9 +11,13 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   OUTCOME 2026-11-14: Models tab → "Find on Hugging Face" (Catalog.swift, one request with config+safetensors
   expanded). HF counts quantized U32 two ways by repo (logical weights or packed words); the BF16/U32 ratio picks
   the formula — sizes exact within 0.2% (35B-A3B-4bit 20.39 vs 20.43 GB on disk; 4B both repos 3.03 GB).
-- [ ] **menu-bar** — `MenuBarExtra` (spec §3.2). Move `PanelModel`/`LibraryModel`/`InstallModel` to the `App`
+- [~] **menu-bar** — `MenuBarExtra` (spec §3.2). Move `PanelModel`/`LibraryModel`/`InstallModel` to the `App`
   struct, pass them in; menu: state, model in memory, switch list, Unload, Open panel, Open OpenChamber. Done when:
   closing the window keeps the menu, switching from the menu loads the model (status shows it).
+  BUILT 2026-11-14 (Hub in OkayMLX.swift owns the models, refreshes every 4 s, disk rescan every 30 s; MenuView.swift;
+  menu-bar symbol: cpu down / memorychip none / memorychip.fill loaded / cpu.fill generating). NOT SEEN: the screen
+  was locked (menu bar captured black; on macOS 26+ status items are drawn by the system, not in the app's window
+  list). Owner to check: the icon is there, the window opens from "Panel…", switching loads.
 - [ ] **live-work** — running generations in `/admin/status` and on the Overview (spec §3.3). Server: `Main` sets a
   `ThreadLocal` client from `User-Agent`; `Switching.Running` keeps client, prompt tokens, tokens, start. App: a
   list under the model in memory. Done when: a curl generation shows up with its client and growing tokens.

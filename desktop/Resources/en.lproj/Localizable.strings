@@ -199,3 +199,6 @@
 "Only the architectures okay-mlx runs are shown: Qwen3, Qwen3.5, Qwen3.6, Qwen3.8." = "Only the architectures okay-mlx runs are shown: Qwen3, Qwen3.5, Qwen3.6, Qwen3.8.";
 "Hugging Face search failed. Check the connection." = "Hugging Face search failed. Check the connection.";
 "Qwen3.5, Qwen3.6 35B, 8bit…" = "Qwen3.5, Qwen3.6 35B, 8bit…";
+"Switch model" = "Switch model";
+"Panel…" = "Panel…";
+"generating · %lld" = "generating · %lld";

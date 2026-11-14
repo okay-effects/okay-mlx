@@ -21,12 +21,15 @@ final class LibraryModel: ObservableObject {
     var settings: SettingsFile { SettingsFile(home: home) }
     private var endpoint = "http://127.0.0.1:8090"
     private var scanning = false
+    private var lastScan = Date.distantPast
 
     init() {
         autoSync = UserDefaults.standard.object(forKey: "autoSyncOpenCode") as? Bool ?? true
     }
 
-    func refresh(_ status: Service.Status) async {
+    /// The library read again: the server at once, the disk (the cache, opencode, OpenChamber) when `rescan` or every
+    /// 30 s — a model's blobs are walked to size them.
+    func refresh(_ status: Service.Status, rescan: Bool = false) async {
         guard !scanning else { return }
         scanning = true
         defer { scanning = false }
@@ -35,9 +38,15 @@ final class LibraryModel: ObservableObject {
         let home = self.home
         let adapters = ProcessInfo.processInfo.environment["OKAY_MLX_ADAPTERS"].map { URL(fileURLWithPath: $0) } ??
             home.appending(path: ".okay-mlx/adapters")
-        let (scanned, code, chamber) = await Task.detached {
-            (Library.scan(cache: cache, adapters: adapters), OpenCode(home: home).state(), OpenChamber(home: home).state())
-        }.value
+        let stale = rescan || models.isEmpty || Date().timeIntervalSince(lastScan) > 30
+        let (found, code, chamber) = stale
+            ? await Task.detached {
+                (Library.scan(cache: cache, adapters: adapters), OpenCode(home: home).state(),
+                 OpenChamber(home: home).state())
+            }.value
+            : (models, openCode, self.chamber)
+        if stale { lastScan = Date() }
+        let scanned = found
         let file = settings
         let entries = file.read()
         let hiddenNow = Set(scanned.map(\.id).filter {

@@ -1,19 +1,63 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @main
 struct OkayMLX: App {
+    @StateObject private var hub = Hub()
+
     var body: some Scene {
         Window("okay-mlx", id: "control-panel") {
-            ControlPanel()
+            ControlPanel(hub: hub, model: hub.panel, installer: hub.installer, library: hub.library)
         }
         .defaultSize(width: 760, height: 620)
         .windowResizability(.contentMinSize)
+        // the menu bar item (spec §3.2): the state, the model in memory, a switch — the app stays while it is there
+        MenuBarExtra {
+            MenuView(model: hub.panel, library: hub.library)
+        } label: {
+            Image(systemName: hub.symbol)
+        }
+        .menuBarExtraStyle(.window)
+    }
+}
+
+/// What the window and the menu share: the service, the downloads, the models — read every few seconds.
+@MainActor
+final class Hub: ObservableObject {
+    let panel = PanelModel()
+    let installer = InstallModel()
+    let library = LibraryModel()
+    private var forwarding: [AnyCancellable] = []
+
+    init() {
+        // the menu bar's symbol follows the service: the hub changes when they do
+        forwarding = [panel.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() },
+                      library.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }]
+        library.refreshAfterAction = { [weak self] in await self?.refresh(rescan: true) }
+        Task { [weak self] in
+            while !Task.isCancelled {
+                await self?.refresh()
+                try? await Task.sleep(for: .seconds(4))
+            }
+        }
+    }
+
+    func refresh(rescan: Bool = false) async {
+        await panel.refresh()
+        if let status = panel.status { await library.refresh(status, rescan: rescan) }
+    }
+
+    /// The menu bar's symbol: generating, a model in memory, none, the service down.
+    var symbol: String {
+        guard panel.status?.apiReady == true else { return "cpu" }
+        if (library.admin?.running ?? 0) > 0 { return "cpu.fill" }
+        return library.admin?.loaded == nil ? "memorychip" : "memorychip.fill"
     }
 }
 
 @MainActor
-private final class PanelModel: ObservableObject {
+final class PanelModel: ObservableObject {
     @Published private(set) var status: Service.Status?
     @Published private(set) var busy = false
     @Published private(set) var refreshError: String?
@@ -56,7 +100,7 @@ private final class PanelModel: ObservableObject {
     }
 }
 
-private struct ControlPanel: View {
+struct ControlPanel: View {
     private enum Tab: String, CaseIterable {
         case overview = "Overview"
         case models = "Models"
@@ -65,9 +109,10 @@ private struct ControlPanel: View {
         case log = "Log"
     }
 
-    @StateObject private var model = PanelModel()
-    @StateObject private var installer = InstallModel()
-    @StateObject private var library = LibraryModel()
+    let hub: Hub
+    @ObservedObject var model: PanelModel
+    @ObservedObject var installer: InstallModel
+    @ObservedObject var library: LibraryModel
     // OKAY_MLX_PANEL_TAB opens a tab (Overview, Models, Clients, Resources, Log): for screenshots and scripts
     @State private var tab = ProcessInfo.processInfo.environment["OKAY_MLX_PANEL_TAB"].flatMap(Tab.init) ?? .overview
     @State private var confirmStop = false
@@ -109,13 +154,8 @@ private struct ControlPanel: View {
         .padding(24)
         .frame(minWidth: 580, minHeight: 510)
         .background(Color(nsColor: .windowBackgroundColor))
-        .task {
-            library.refreshAfterAction = { await refreshAll() }
-            while !Task.isCancelled {
-                await refreshAll()
-                try? await Task.sleep(for: .seconds(tab == .overview || tab == .models ? 4 : 12))
-            }
-        }
+        // the hub reads every few seconds; the window, when it opens, at once
+        .task { await hub.refresh(rescan: true) }
         .alert("Model action failed", isPresented: Binding(
             get: { library.error != nil }, set: { if !$0 { library.error = nil } }
         )) {
@@ -270,10 +310,7 @@ private struct ControlPanel: View {
 
     private var cardBackground: Color { Color(nsColor: .controlBackgroundColor) }
 
-    private func refreshAll() async {
-        await model.refresh()
-        if let status = model.status { await library.refresh(status) }
-    }
+    private func refreshAll() async { await hub.refresh(rescan: true) }
 
     /// The model in memory now (the server's /admin/status): its memory, how it runs, the last answer's speed —
     /// unloaded and loaded from here, and unloaded by itself when idle.
