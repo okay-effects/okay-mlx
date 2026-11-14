@@ -18,9 +18,12 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   menu-bar symbol: cpu down / memorychip none / memorychip.fill loaded / cpu.fill generating). NOT SEEN: the screen
   was locked (menu bar captured black; on macOS 26+ status items are drawn by the system, not in the app's window
   list). Owner to check: the icon is there, the window opens from "Panel…", switching loads.
-- [ ] **live-work** — running generations in `/admin/status` and on the Overview (spec §3.3). Server: `Main` sets a
+- [x] **live-work** — running generations in `/admin/status` and on the Overview (spec §3.3). Server: `Main` sets a
   `ThreadLocal` client from `User-Agent`; `Switching.Running` keeps client, prompt tokens, tokens, start. App: a
   list under the model in memory. Done when: a curl generation shows up with its client and growing tokens.
+  OUTCOME 2026-11-14: /admin/status "generations" [model, client, prompt_tokens (-1 in prefill), cached, tokens,
+  millis, per_second]; client = User-Agent's first product (Admin.clientOf). Seen live: opencode 173→363 tokens
+  ~117 tok/s; the Overview lists them, the hub polls every 1 s while any runs.
 - [ ] **chamber-closer** — OpenChamber: reload without restart if it can, default model, iPhone pairing QR (spec
   §3.4). First investigate OpenChamber 2.5.3 / opencode 2.2.5 routes (npm -g @openchamber/web sources).
 - [ ] **chamber-env** — clean OpenChamber's LaunchAgent environment, backup, restart once (spec §3.5).

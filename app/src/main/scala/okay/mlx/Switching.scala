@@ -101,7 +101,7 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     ensure(w, a)
     if running.isEmpty then fitMemory()
     used = System.nanoTime()
-    val r = Running()
+    val r = Running(name, Option(Switching.client.get).getOrElse("?"))
     running += r
     (current.nn, r)
   }
@@ -144,7 +144,11 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
   /** THE STATE, read at once (never waiting for a load or a switch) */
   def state: Switching.State =
     val t = lastTiming
-    Switching.State(Option(snapshot), last._1, loading, switching, running.size,
+    // read without the lock (a load holds it): a copy taken as it changes is good enough for a view
+    val now = try running.toVector catch case _: RuntimeException => Vector.empty
+    val going = now.map(r => Switching.Going(r.model, r.client, r.prompt, r.cached, r.tokens,
+      (System.nanoTime() - r.started) / 1000000L))
+    Switching.State(Option(snapshot), last._1, loading, switching, going,
       if loading.nonEmpty || switching then -1L else mlx(_root_.mlx.Mlx.activeMemory),
       (System.nanoTime() - used) / 1000000000L, t)
 
@@ -173,7 +177,12 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
         current.nn.use(a)
         snapshot = snapshot.nn.copy(adapter = a)
 
-  private final class Running:
+  /** a generation going on: its model and client, its prompt (and how much a cache gave), its tokens so far */
+  private final class Running(val model: String, val client: String):
+    val started: Long = System.nanoTime()
+    @volatile var tokens = 0
+    @volatile var prompt = -1
+    @volatile var cached = 0
     @volatile var last: Long = System.nanoTime()
     @volatile var generation: Llm.Generation | Null = null
     def release(): Unit = Switching.this.synchronized {
@@ -197,7 +206,14 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       private var done = false
       def next(): Option[String] =
         r.last = System.nanoTime()
-        g.next()
+        val piece = g.next()
+        if piece.nonEmpty then
+          r.tokens += 1
+          // the prompt's size once its prefill is done (read on this thread, between tokens)
+          if r.prompt < 0 then
+            try { val t = g.timing; r.prompt = t.promptTokens; r.cached = t.cachedTokens }
+            catch case _: Exception => r.prompt = 0
+        piece
       def text: String = g.text
       def timing: Timing = g.timing
       def byStop: Boolean = g.byStop
@@ -217,5 +233,13 @@ object Switching:
       since: Long)
   /** `loaded`: none when unloaded; `last`: the model the next request loads by default; `loading`: one loading now;
    * `held`: MLX's active memory (bytes, -1 when the MLX thread is busy); the last generation's timing and when */
+  /** the client of the request this thread serves (`Main` sets it from the request's User-Agent): the gateway runs a
+   * request on the thread that accepted it */
+  val client: ThreadLocal[String] = ThreadLocal()
+
+  /** a generation going on, as the panel shows it: prompt -1 while its prefill runs */
+  final case class Going(model: String, client: String, prompt: Int, cached: Int, tokens: Int, millis: Long):
+    def perSecond: Double = if millis <= 0 then 0 else tokens * 1000.0 / millis
+
   final case class State(loaded: Option[Loaded], last: String, loading: Option[String], switching: Boolean,
-      running: Int, held: Long, idleSeconds: Long, lastTiming: Option[(Timing, Long)])
+      going: Vector[Going], held: Long, idleSeconds: Long, lastTiming: Option[(Timing, Long)])

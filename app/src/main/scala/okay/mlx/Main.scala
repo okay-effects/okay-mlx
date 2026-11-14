@@ -38,8 +38,11 @@ import mlx.llm.Models
       type Gw[X] = (Llm + Http + Clock + Fresh + Log)[X]
       Server.run(rest.headOption.map(_.toInt).getOrElse(8090)) { (req, out) =>
         // the gateway managed (Admin): the model loaded, unloaded, the state read
-        if Admin.handles(req) then run(Http.socket(out)(Admin.route[Http](req, switching))) else
-        run(Log.to(stderr, Level.Info)(Fresh.from(0)(Clock.system(Http.socket(out)(
-          Llm.on(backend)(Gateway.route[Gw](req)))))))
+        if Admin.handles(req) then run(Http.socket(out)(Admin.route[Http](req, switching)))
+        else
+          // the client this thread serves, for /admin/status's generations
+          Switching.client.set(Admin.clientOf(req))
+          run(Log.to(stderr, Level.Info)(Fresh.from(0)(Clock.system(Http.socket(out)(
+            Llm.on(backend)(Gateway.route[Gw](req)))))))
       }
     case _ => System.err.println("usage: ask <question> | bench [runs] [source file] | serve [port]")

@@ -202,3 +202,5 @@
 "Switch model" = "Змінити модель";
 "Panel…" = "Панель…";
 "generating · %lld" = "генерує · %lld";
+"reading the prompt…" = "читає запит…";
+"%lld tokens · %lld tok/s · prompt %lld (%lld cached)" = "%lld токенів · %lld ток/с · запит %lld (%lld з кешу)";

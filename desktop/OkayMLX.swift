@@ -38,7 +38,9 @@ final class Hub: ObservableObject {
         Task { [weak self] in
             while !Task.isCancelled {
                 await self?.refresh()
-                try? await Task.sleep(for: .seconds(4))
+                // every second while a generation runs (its tokens are watched), else every 4
+                let busy = (self?.library.admin?.running ?? 0) > 0
+                try? await Task.sleep(for: .seconds(busy ? 1 : 4))
             }
         }
     }
@@ -339,6 +341,15 @@ struct ControlPanel: View {
                         if let last = admin.last_generation {
                             stat("Last answer", String(format: "%.0f tok/s · %d in (%d cached)",
                                                        last.decode_per_second, last.prompt_tokens, last.cached_tokens))
+                        }
+                    }
+                    ForEach(Array((admin.generations ?? []).enumerated()), id: \.offset) { _, going in
+                        HStack(spacing: 8) {
+                            ProgressView().controlSize(.mini)
+                            Text(going.client).font(.callout.weight(.medium))
+                            Text(going.prompt_tokens < 0 ? String(localized: "reading the prompt…")
+                                 : String(localized: "\(going.tokens) tokens · \(Int(going.per_second)) tok/s · prompt \(going.prompt_tokens) (\(going.cached_tokens) cached)"))
+                                .font(.callout.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
                 } else {

@@ -22,6 +22,16 @@ struct Admin: Sendable {
         let at: Int64
     }
 
+    struct Going: Decodable, Sendable, Hashable {
+        let model: String
+        let client: String
+        let prompt_tokens: Int
+        let cached_tokens: Int
+        let tokens: Int
+        let millis: Int64
+        let per_second: Double
+    }
+
     struct Status: Decodable, Sendable {
         let loaded: Loaded?
         let last_model: String
@@ -34,6 +44,8 @@ struct Admin: Sendable {
         let memory_pressure: Int
         let unload_after_minutes: Int
         let last_generation: Generation?
+        /// The generations going on (absent from servers before 2026-11-14).
+        let generations: [Going]?
 
         /// The room a model would have: what is free, and the loaded model's own memory (it is let go first).
         var room: Int64 {

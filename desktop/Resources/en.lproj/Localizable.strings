@@ -202,3 +202,5 @@
 "Switch model" = "Switch model";
 "Panel…" = "Panel…";
 "generating · %lld" = "generating · %lld";
+"reading the prompt…" = "reading the prompt…";
+"%lld tokens · %lld tok/s · prompt %lld (%lld cached)" = "%lld tokens · %lld tok/s · prompt %lld (%lld cached)";
