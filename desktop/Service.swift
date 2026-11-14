@@ -118,11 +118,26 @@ struct Service: Sendable {
         case .stop:
             try unload()
         case .restart:
-            try checked("kickstart", "-k", target)
+            // out and in again: launchd reads the LaunchAgent anew (a startup model changed)
+            try unload()
+            try checked("bootstrap", domain, plist.path)
         case .disableAutostart:
             try checked("disable", target)
             try unload()
         }
+    }
+
+    /// The model the service loads when it starts (the LaunchAgent's MLX_MODEL); it applies at the next start.
+    func setStartupModel(_ model: String) throws {
+        try installIfNeeded()
+        let data = try Data(contentsOf: plist)
+        guard var config = try PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any]
+        else { throw Failure(message: String(localized: "Invalid LaunchAgent file.\n\(plist.path)")) }
+        var environment = config["EnvironmentVariables"] as? [String: String] ?? [:]
+        environment["MLX_MODEL"] = model
+        config["EnvironmentVariables"] = environment
+        let updated = try PropertyListSerialization.data(fromPropertyList: config, format: .xml, options: 0)
+        try updated.write(to: plist, options: .atomic)
     }
 
     private func unload() throws {

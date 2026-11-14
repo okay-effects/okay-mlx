@@ -60,13 +60,16 @@ private struct ControlPanel: View {
     private enum Tab: String, CaseIterable {
         case overview = "Overview"
         case models = "Models"
+        case clients = "Clients"
         case resources = "Resources"
         case log = "Log"
     }
 
     @StateObject private var model = PanelModel()
     @StateObject private var installer = InstallModel()
-    @State private var tab = Tab.overview
+    @StateObject private var library = LibraryModel()
+    // OKAY_MLX_PANEL_TAB opens a tab (Overview, Models, Clients, Resources, Log): for screenshots and scripts
+    @State private var tab = ProcessInfo.processInfo.environment["OKAY_MLX_PANEL_TAB"].flatMap(Tab.init) ?? .overview
     @State private var confirmStop = false
     @State private var copied = false
 
@@ -87,7 +90,10 @@ private struct ControlPanel: View {
             if let status = model.status {
                 switch tab {
                 case .overview: overview(status)
-                case .models: models(status)
+                case .models: ModelsView(status: status, busy: model.busy, installer: installer, library: library) {
+                    await refreshAll()
+                }
+                case .clients: ClientsView(status: status, library: library)
                 case .resources: ResourcesView(pid: status.pid)
                 case .log: log(status)
                 }
@@ -104,10 +110,18 @@ private struct ControlPanel: View {
         .frame(minWidth: 580, minHeight: 510)
         .background(Color(nsColor: .windowBackgroundColor))
         .task {
+            library.refreshAfterAction = { await refreshAll() }
             while !Task.isCancelled {
-                await model.refresh()
-                try? await Task.sleep(for: .seconds(12))
+                await refreshAll()
+                try? await Task.sleep(for: .seconds(tab == .overview || tab == .models ? 4 : 12))
             }
+        }
+        .alert("Model action failed", isPresented: Binding(
+            get: { library.error != nil }, set: { if !$0 { library.error = nil } }
+        )) {
+            Button("OK", role: .cancel) { library.error = nil }
+        } message: {
+            Text(library.error ?? "")
         }
         .alert("Command failed", isPresented: Binding(
             get: { model.actionError != nil }, set: { if !$0 { model.actionError = nil } }
@@ -150,7 +164,7 @@ private struct ControlPanel: View {
                 ProgressView().controlSize(.small).accessibilityLabel("Running command")
             }
             Button {
-                Task { await model.refresh() }
+                Task { await refreshAll() }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
@@ -171,12 +185,7 @@ private struct ControlPanel: View {
                             Text("PID \(pid)").font(.caption.monospacedDigit()).foregroundStyle(.secondary)
                         }
                     }
-                    VStack(alignment: .leading, spacing: 5) {
-                        Text("Active model").font(.caption).foregroundStyle(.secondary)
-                        Text(status.models.first ?? "—")
-                            .font(.system(size: 19, weight: .semibold, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
+                    loadedModel(status)
                     Divider()
                     HStack {
                         Text(status.endpoint).font(.callout.monospaced()).textSelection(.enabled)
@@ -261,36 +270,78 @@ private struct ControlPanel: View {
 
     private var cardBackground: Color { Color(nsColor: .controlBackgroundColor) }
 
-    private func models(_ status: Service.Status) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ModelDownloadView(status: status, busy: model.busy, installer: installer) {
-                await model.refresh()
-            }
-            Divider()
-            Text("Downloaded models").font(.headline)
-            let names = Array(Set(status.cachedModels + status.models)).sorted()
-            if names.isEmpty {
-                let message: LocalizedStringKey = status.apiReady
-                    ? "Model list unavailable."
-                    : "Download a model to get started."
-                Text(message)
-                    .foregroundStyle(.secondary)
-                Spacer()
-            } else {
-                List(names, id: \.self) { name in
+    private func refreshAll() async {
+        await model.refresh()
+        if let status = model.status { await library.refresh(status) }
+    }
+
+    /// The model in memory now (the server's /admin/status): its memory, how it runs, the last answer's speed —
+    /// unloaded and loaded from here, and unloaded by itself when idle.
+    @ViewBuilder
+    private func loadedModel(_ status: Service.Status) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Model in memory").font(.caption).foregroundStyle(.secondary)
+            if let admin = library.admin {
+                if let loading = admin.loading {
                     HStack {
-                        Text(name).font(.system(.body, design: .monospaced)).textSelection(.enabled)
-                        Spacer()
-                        if status.apiReady && name == status.models.first {
-                            Label("Active", systemImage: "checkmark.circle.fill")
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(.green)
+                        ProgressView().controlSize(.small)
+                        Text("Loading \(loading)…").font(.callout.monospaced())
+                    }
+                } else if let loaded = admin.loaded {
+                    Text(Library.title(loaded.model) + (loaded.adapter.map { " + \($0)" } ?? ""))
+                        .font(.system(size: 19, weight: .semibold))
+                    Text(loaded.model).font(.caption.monospaced()).foregroundStyle(.secondary).textSelection(.enabled)
+                    HStack(spacing: 14) {
+                        stat("Memory", admin.mlx_active_bytes >= 0
+                             ? admin.mlx_active_bytes.formatted(.byteCount(style: .memory)) : "—")
+                        if loaded.mixture {
+                            stat("Experts", loaded.expert_slots == 0 ? String(localized: "all in memory")
+                                 : String(localized: "\(loaded.expert_slots) hot a layer"))
+                        }
+                        stat("Generating", admin.running == 0 ? String(localized: "idle") : "\(admin.running)")
+                        if let last = admin.last_generation {
+                            stat("Last answer", String(format: "%.0f tok/s · %d in (%d cached)",
+                                                       last.decode_per_second, last.prompt_tokens, last.cached_tokens))
                         }
                     }
-                    .padding(.vertical, 4)
+                } else {
+                    Text("No model in memory").font(.system(size: 19, weight: .semibold))
+                    Text("The next request loads the one it names, else \(admin.last_model).")
+                        .font(.caption).foregroundStyle(.secondary)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                HStack {
+                    if admin.loaded != nil {
+                        Button("Unload") { library.unload() }
+                            .help("Give the memory back; the next request loads a model again.")
+                    } else {
+                        Button("Load \(Library.title(admin.last_model))") { library.load(admin.last_model) }
+                    }
+                    Spacer()
+                    Picker("Unload when idle", selection: Binding(
+                        get: { library.unloadAfter }, set: { library.setUnloadAfter($0) }
+                    )) {
+                        Text("Never").tag(0)
+                        Text("after 10 min").tag(10)
+                        Text("after 30 min").tag(30)
+                        Text("after 1 hour").tag(60)
+                        Text("after 3 hours").tag(180)
+                    }
+                    .fixedSize()
+                }
+                .disabled(library.working != nil || admin.loading != nil)
+            } else if let error = library.adminError {
+                Text(error).font(.callout).foregroundStyle(.orange)
+            } else {
+                Text(status.pid == nil ? "—" : String(localized: "Waiting for the server…"))
+                    .font(.system(size: 19, weight: .semibold))
             }
+        }
+    }
+
+    private func stat(_ title: LocalizedStringKey, _ value: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption2).foregroundStyle(.secondary)
+            Text(value).font(.callout.monospacedDigit())
         }
     }
 

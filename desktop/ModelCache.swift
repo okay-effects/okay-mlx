@@ -56,11 +56,12 @@ enum ModelCache {
             weights = ["model.safetensors"]
         }
         for name in weights {
-            guard safePath(name), let size = try? snapshot.appending(path: name)
+            // a cached file is a symlink into blobs/: its size is the blob's, not the link's
+            guard safePath(name), let size = try? snapshot.appending(path: name).resolvingSymlinksInPath()
                 .resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 0 else {
                 throw InstallFailure(String(localized: "The model download is incomplete."))
             }
-            try validateWeights(snapshot.appending(path: name), size: size)
+            try validateWeights(snapshot.appending(path: name).resolvingSymlinksInPath(), size: size)
         }
     }
 
