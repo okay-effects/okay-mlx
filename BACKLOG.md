@@ -8,3 +8,8 @@
   not only the log.
 - **Runtime memory knobs**: `OKAY_MLX_CACHE_GB` / `OKAY_MLX_PREFIX_GB` changeable through a control route without a
   restart (FreeToken's elastic re-allocation, `server/control_api.py`); pools' occupancy in a stats route.
+- **Panel: downloads queued** — several downloads at once, a queue view, pause; now one at a time.
+- **Panel: per-client default model** — which model each client (Claude Code, opencode) gets when it names none;
+  now the one in memory. Needs the client known in `Switching.wanted` (see SPRINT live-work's ThreadLocal).
+- **Panel: notarized build** — the app is ad-hoc signed; a Developer ID + notarization would remove the Gatekeeper
+  prompt (needs the owner's Apple account).
