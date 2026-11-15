@@ -20,3 +20,18 @@
   `Qwen3Compute.score`) — routers and frame lines over HTTP; OpenAI `logprobs`/`top_logprobs`; a request's grammar
   (`response_format: json_schema`) for clients that write JSON; `POST /admin/batch` (a JSONL of requests, results to
   a file, resumable) for the teacher's overnight corpora on the 35B.
+- **Speed, by expected gain** (2026-11-15; one request is already at mlx_lm's: 35B-A3B 105 vs 109 tok/s, 27B 18.8 vs
+  19.4 — bench/history.tsv):
+  1. **Batched decode across requests**: requests now take turns on the one MLX thread a token at a time, so N agents
+     share one stream's throughput. Decode is bound by reading the weights; one step for B sequences reads them once
+     — throughput near-linear in B for a few sequences, each one barely slower. Needs per-sequence KV caches stacked
+     (padding or ragged attention), the hybrid models' linear states per row, the prefix cache per sequence.
+     Measure: 2 and 4 concurrent Claude Code / opencode sessions, total and per-session tok/s.
+  2. **A draft model for the dense 27B** (no MTP layer of its own): Qwen3.5-0.8B or 2B with the same tokenizer drafts,
+     the 27B verifies in one pass — exact; measure the acceptance and tok/s on code and on prose.
+  3. **KV cache in 8 bits** for long agent contexts: half the memory, less paging; exactness checked against bf16
+     on the 35B's answers (greedy, 256 tokens).
+  4. **The first request after a restart**: each client's system-prompt prefix restored from the disk store; check
+     it is found after `kickstart -k` (the 19.7k cold prefill is 16.7 s).
+  5. **Forced runs under a client's JSON schema**: where one continuation is allowed, fed as one step (with the
+     grammar item above).
