@@ -10,9 +10,13 @@
   Gateway (bench/history.tsv): 4B 2 requests 80 → 123, 4 requests 73 → 162 tok/s total; 35B 101 → 117, 100 → 136.
   Before batching, concurrency was WORSE than one request (per-sequence passes interleaved). Found on the way: a
   generation whose client vanished stayed "running" for hours (no unload, no memory fitting) — fixed 93b1b02.
-- [ ] **batch-2** — the first request (alone: drafts/guesses) turned plain and joined when a second arrives — now 2
+- [x] **batch-2** — the first request (alone: drafts/guesses) turned plain and joined when a second arrives — now 2
   requests give 123 tok/s total against 146 for one; drafting → plain is one-way (the draft layer dropped: y = a step
   over `last`). Measure n=2 again; target ≥ one request's total.
+  OUTCOME 2026-11-15 (mlx-scala b610544): every session joins the batch from its start; with two alive, one
+  guessing/drafting turns plain. Gateway: 4B 2 requests 191, 4 requests 251 tok/s total (one: 142); 35B 162 / 220 (one:
+  145) — against 80/73 and 101/100 before batching. BatchJoinSuite: the turned session's tokens its own (0.6B 80/80;
+  35B with drafts 29 then a bf16 near tie), rounds 1.71 wide.
 
 ## Done: the desktop panel (specs/desktop-panel.md)
 

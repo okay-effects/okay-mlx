@@ -9,3 +9,7 @@ date	okay-mlx	mlx-scala	host_load	workload	mine	ref	ratio	note
 2026-11-15	93b1b02+batch	0047b40	-	Qwen3.5-4B 4 concurrent requests (tok/s total)	162.5	73.2	2.22	
 2026-11-15	93b1b02+batch	0047b40	-	Qwen3.6-35B-A3B 2 concurrent requests (tok/s total)	116.8	101.0	1.16	whole, no hot experts
 2026-11-15	93b1b02+batch	0047b40	-	Qwen3.6-35B-A3B 4 concurrent requests (tok/s total)	136.4	99.9	1.37	1 request: 146.0 batched build; the old build's single run 76.3 (after a restart: not comparable)
+2026-11-15	f02e843	b610544	-	Qwen3.5-4B 2 concurrent requests (tok/s total)	190.6	80.2	2.38	batch-2: the first request turns plain and joins (mlx-scala b610544)
+2026-11-15	f02e843	b610544	-	Qwen3.5-4B 4 concurrent requests (tok/s total)	251.1	73.2	3.43	1 request 142.2
+2026-11-15	f02e843	b610544	-	Qwen3.6-35B-A3B 2 concurrent requests (tok/s total)	161.9	101.0	1.60	whole; 1 request 144.5
+2026-11-15	f02e843	b610544	-	Qwen3.6-35B-A3B 4 concurrent requests (tok/s total)	220.4	99.9	2.21	
