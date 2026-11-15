@@ -1,18 +1,5 @@
 # SPRINT — okay-mlx
 
-## Next queue: the runtime for the phone ability (okay-desk specs/phone-ability.md, 2026-11-15)
-
-- [ ] **grammar** — a request's grammar honoured by the gateway: `okay_grammar` (okay-llm's `Grammar`, the same
-  type the browser uses) or OpenAI's `response_format: {type: json_schema}` turned into one; the mask applied in
-  mlx-scala's sampling (`Session` port, as `Quote` is), forced runs fed as one step. Needed by okay-desk M2 (the 35B
-  and 4B baselines with the phone's exact constraint) and by the teacher (programs that always parse). Done when: a
-  json_schema request never returns invalid JSON (200 random schemas), and the 35B's speed with a grammar is logged.
-- [ ] **score** — `POST /v1/score {model, prompt, options[]}` → each option's log-probability after the prompt, in
-  one packed forward (okay-llm `Qwen3Compute.score`'s idea on mlx-scala): routers, choosing among readings.
-- [ ] **logprobs** — OpenAI's `logprobs` / `top_logprobs` on chat completions (the tokens' log-probabilities).
-- [ ] **teacher queue** — `POST /admin/batch` (a JSONL of requests, results to a file, resumable), so okay-desk's
-  corpus (M3) runs on the 35B overnight without a client holding connections.
-
 ## Done: the desktop panel (specs/desktop-panel.md)
 
 Queue, in order (the owner, 2026-11-14: "делай всё по порядку"). Design: specs/desktop-panel.md §3.

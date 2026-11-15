@@ -13,3 +13,10 @@
   now the one in memory. Needs the client known in `Switching.wanted` (see SPRINT live-work's ThreadLocal).
 - **Panel: notarized build** — the app is ad-hoc signed; a Developer ID + notarization would remove the Gatekeeper
   prompt (needs the owner's Apple account).
+- **For okay-desk's line, when it asks** (okay-desk specs/phone.md; 2026-11-15): okay-desk's benches read through
+  mlx-scala directly (`FrameRead`, `QwenReading`), so none of these blocks its phone work — they make the gateway
+  useful to the line and to other clients:
+  `POST /v1/score {model, prompt, options[]}` (each option's log-probability, one packed forward, as okay-llm's
+  `Qwen3Compute.score`) — routers and frame lines over HTTP; OpenAI `logprobs`/`top_logprobs`; a request's grammar
+  (`response_format: json_schema`) for clients that write JSON; `POST /admin/batch` (a JSONL of requests, results to
+  a file, resumable) for the teacher's overnight corpora on the 35B.
