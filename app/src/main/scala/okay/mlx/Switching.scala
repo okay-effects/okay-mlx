@@ -70,7 +70,7 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
   private def drain(): Unit =
     while running.nonEmpty do
       val now = System.nanoTime()
-      running.filter(r => now - r.last > Switching.abandoned).foreach(_.abandon())
+      running.filter(r => !r.inside && now - r.last > Switching.abandoned).foreach(_.abandon())
       if running.nonEmpty then wait(1000)
 
   /** `w` with adapter `a` in memory — loaded, switched to, or (`reload`) loaded again — the generations on another
@@ -130,6 +130,17 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
   private val idle = Thread(() =>
     while true do
       Thread.sleep(30000)
+      // a generation whose client is gone (the gateway failed to write to it: its stream never closed) holds the
+      // model forever — "1 generation running", no unload, no memory fitting: closed after a minute of silence,
+      // unless it is inside a step (a long prompt's prefill takes minutes)
+      synchronized {
+        val now = System.nanoTime()
+        running.filter(r => !r.inside && now - r.last > Switching.abandoned).toVector.foreach { r =>
+          System.err.println(s"[Warn] a generation on ${r.model} silent for a minute (its client gone): closed")
+          r.abandon()
+        }
+        notifyAll()
+      }
       val after = Settings.unloadAfter
       if after > 0 && current != null && System.nanoTime() - used > after * 60L * 1000 * 1000 * 1000 then
         synchronized {
@@ -184,6 +195,8 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     @volatile var prompt = -1
     @volatile var cached = 0
     @volatile var last: Long = System.nanoTime()
+    /** inside a step now (a prefill may take minutes): not silent */
+    @volatile var inside = false
     @volatile var generation: Llm.Generation | Null = null
     def release(): Unit = Switching.this.synchronized {
       running -= this
@@ -206,7 +219,8 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       private var done = false
       def next(): Option[String] =
         r.last = System.nanoTime()
-        val piece = g.next()
+        r.inside = true
+        val piece = try g.next() finally { r.inside = false; r.last = System.nanoTime() }
         if piece.nonEmpty then
           r.tokens += 1
           // the prompt's size once its prefill is done (read on this thread, between tokens)
