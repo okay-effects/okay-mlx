@@ -64,3 +64,28 @@ Keep only what a service needs (PATH, HOME, LANG, …); back up the plist; resta
 Per the owner's rule (one version while unused): rebuild the server archive (`scripts/package-server.sh`) and the
 app zip (`desktop/package.sh`), upload over the v0.1.1 assets, move the tag to the commit; `install.sh` and the
 README's link then give the new server and app.
+
+## 4. Batched decode across requests (2026-11-15, the operator: "делай батчинг")
+
+**Why.** One request decodes at mlx_lm's speed (35B-A3B 105 vs 109 tok/s), but requests take turns on the one MLX
+thread a token at a time: N agents share one stream. Decode is bound by reading the weights; one step for B
+sequences reads them once.
+
+**The design (mlx-scala + okay-mlx):**
+- `Model.stepMany(ids [1, B], states)` → logits [1, B, V]: one token for each of B sequences. Default: each row by
+  `logits` (correct for any model). Qwen35 and Qwen3 override: embedding, norms, every projection, the MLP and the
+  experts on the B rows at once (the B tokens are a "sequence" to them); per row only what is the row's own — RoPE
+  at its offset, its KV cache, its attention; the linear layers' conv and delta rule from its own state (n = 1).
+  Numerically close to the rows apart, not bit-exact (a matmul over B rows is another kernel than over one).
+- `Batch` (mlx-scala): the sessions decoding plainly on one model. A ROUND: every member's pending token (a lazy
+  array) stacked, `stepMany`, each member's own choice on its row (its sampling, its mask, its penalties), the new
+  steps started, then the old tokens read into each member's `ready` queue — the same pipelining as one session.
+  A session's `next()` with an empty queue runs a round: one round gives a token to every member.
+- A member is a session in PLAIN mode: no port, no guesses, no drafts (they are per-sequence passes). Policy in
+  okay-mlx: a request that starts while another generation runs starts plain and joins the batch; one alone keeps
+  its drafts and guesses (the single-user speed). A finished or closed session leaves.
+- All on the one MLX thread (as now): no locks.
+
+**Measure:** the logits of `stepMany` against each row's `logits` (relative error), greedy tokens over 64 steps for
+3 prompts batched vs apart; then on the gateway: 1, 2, 4 concurrent requests on the 4B and the 35B — total and
+per-request tok/s, before and after (bench/history.tsv).

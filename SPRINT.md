@@ -1,5 +1,11 @@
 # SPRINT — okay-mlx
 
+- [~] **batch** — batched decode across requests (specs/desktop-panel.md §4). mlx-scala (in a worktree: the main
+  checkout has another session's Lora edits): `Model.stepMany`, Qwen35/Qwen3 overrides, `Session` plain-mode hooks,
+  `Batch`; a suite (stepMany ≈ logits per row; greedy tokens equal over 64 steps). okay-mlx: `MlxBackend` one Batch
+  per model, a request starting while another runs → plain + joins. Done when: 2 and 4 concurrent requests measured
+  before/after on 4B and 35B, rows in bench/history.tsv, the service reinstalled.
+
 ## Done: the desktop panel (specs/desktop-panel.md)
 
 Queue, in order (the owner, 2026-11-14: "делай всё по порядку"). Design: specs/desktop-panel.md §3.
