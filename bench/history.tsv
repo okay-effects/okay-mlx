@@ -4,3 +4,8 @@ date	okay-mlx	mlx-scala	host_load	workload	mine	ref	ratio	note
 2026-11-03	21fc8b7	8ea27e2	4.2	Qwen3.6-35B-A3B decode 256, greedy, guesses on (tok/s)	103.3	-	-	one run; 0 of 7 guesses taken on a story (no repeats to look up)
 2026-11-02	21fc8b7	8ea27e2	3.0	gateway, 35B, cold prefill 19.7k (s)	16.7	-	-	memory bounded (cache 1 GB, prefixes 1.5 GB); unbounded it paged: 40.9 s, then 0.3 tok/s
 2026-11-02	21fc8b7	8ea27e2	3.0	gateway, 35B, prefill 208 new on 19.5k cached (s)	0.32	-	-	unbounded: 15.9 s (paging); 3 rounds alternated, medians
+2026-11-15	93b1b02+batch	0047b40	-	Qwen3.5-4B 1 request, 200 tokens (tok/s total)	146.2	145.2	-	before = no batch; greedy, /no_think
+2026-11-15	93b1b02+batch	0047b40	-	Qwen3.5-4B 2 concurrent requests (tok/s total)	123.4	80.2	1.54	batched 1.98 a round; the first request alone keeps drafts/guesses, not batched
+2026-11-15	93b1b02+batch	0047b40	-	Qwen3.5-4B 4 concurrent requests (tok/s total)	162.5	73.2	2.22	
+2026-11-15	93b1b02+batch	0047b40	-	Qwen3.6-35B-A3B 2 concurrent requests (tok/s total)	116.8	101.0	1.16	whole, no hot experts
+2026-11-15	93b1b02+batch	0047b40	-	Qwen3.6-35B-A3B 4 concurrent requests (tok/s total)	136.4	99.9	1.37	1 request: 146.0 batched build; the old build's single run 76.3 (after a restart: not comparable)

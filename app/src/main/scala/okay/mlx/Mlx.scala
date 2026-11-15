@@ -3,7 +3,7 @@ package okay.mlx
 import java.nio.file.Path
 import java.util.concurrent.{Callable, ExecutionException, Executors}
 import okay.llm.{Ask, Llm, Timing}
-import mlx.llm.{Adaptable, Chat, Lora, Model, PrefixCache, PrefixStore, Quote, Sampling, Session}
+import mlx.llm.{Adaptable, Batch, Chat, Lora, Model, PrefixCache, PrefixStore, Quote, Sampling, Session}
 
 /** okay-llm's model on Apple's MLX (mlx-scala): the conversation through the model's own chat template — a
  * `Llm.Backend`; `Llm.on(backend)` handles the `Llm` effect. The messages pass as they are: okay-llm and mlx-scala
@@ -28,6 +28,10 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
       s.frequencyPenalty.getOrElse(defaults.frequencyPenalty))
 
   def count(ask: Ask): Int = mlx(prompt(ask).length)
+
+  // THE BATCH of the requests decoding on this model, and how many are open now (both on the MLX thread alone)
+  private val batch = Batch(model)
+  private var live = 0
 
   // THE ADAPTER ON the model now (`Adapters`), if any; a prefix cache for each (with one on, the model's states are
   // another model's: the base's prefixes do not hold) — the base's on disk too, an adapter's in memory alone
@@ -69,8 +73,13 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
         else q.sources.map(chat.tokenizer.encode).reduce((a, b) => a ++ chat.tokenizer.encode("\n\n") ++ b)
       Quote(chat.tokenizer, source, q.open, q.close)
     }
+    // BATCHED when not alone: a request that starts while another runs decodes plainly (no guesses, no drafts: a
+    // pass of one sequence each) and joins the model's batch — a round steps every such request at once, the
+    // weights read once for all (mlx-scala's `Batch`); alone it keeps its guesses or drafts, the single user's speed
+    private val alone = { val a = live == 0; live += 1; a }
     private val session = Session(model, tokens, ask.maxTokens, chat.stops, prefixes, chat.marks(tokens),
-      sampling(ask), guesses, port = quote, anchors = chat.anchors, drafts = drafts)
+      sampling(ask), if alone then guesses else 0, port = quote, anchors = chat.anchors,
+      drafts = if alone then drafts else 0, batch = batch)
     private val stream = chat.tokenizer.Stream()
     private val sb = new StringBuilder
     def next(): Option[String] = mlx(session.next().map { t =>
@@ -85,6 +94,9 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
     def byStop: Boolean = session.endedByStop
     def close(): Unit = mlx {
       session.close()
+      live -= 1
+      if batch.rounds > 0 then
+        System.err.println(f"[Info] batch: ${batch.rounds} rounds, ${batch.stepped.toDouble / batch.rounds}%.2f a round")
       if session.passes > 0 then
         val what = if drafting then "drafts" else "guesses"
         System.err.println(s"[Info] $what: ${session.taken} of ${session.guessed} taken, " +

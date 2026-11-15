@@ -1,10 +1,18 @@
 # SPRINT — okay-mlx
 
-- [~] **batch** — batched decode across requests (specs/desktop-panel.md §4). mlx-scala (in a worktree: the main
+- [x] **batch** — batched decode across requests (specs/desktop-panel.md §4). mlx-scala (in a worktree: the main
   checkout has another session's Lora edits): `Model.stepMany`, Qwen35/Qwen3 overrides, `Session` plain-mode hooks,
   `Batch`; a suite (stepMany ≈ logits per row; greedy tokens equal over 64 steps). okay-mlx: `MlxBackend` one Batch
   per model, a request starting while another runs → plain + joins. Done when: 2 and 4 concurrent requests measured
   before/after on 4B and 35B, rows in bench/history.tsv, the service reinstalled.
+  OUTCOME 2026-11-15: mlx-scala 0047b40 (stepMany, Batch, BatchSuite: rows within the code's own noise — 0.6B 1.62% vs
+  1.49%, 0.8B 0.99 vs 1.21, 35B 2.45 vs 2.76 —, copies identical; 35B three sessions 107 → 171 tok/s, same tokens).
+  Gateway (bench/history.tsv): 4B 2 requests 80 → 123, 4 requests 73 → 162 tok/s total; 35B 101 → 117, 100 → 136.
+  Before batching, concurrency was WORSE than one request (per-sequence passes interleaved). Found on the way: a
+  generation whose client vanished stayed "running" for hours (no unload, no memory fitting) — fixed 93b1b02.
+- [ ] **batch-2** — the first request (alone: drafts/guesses) turned plain and joined when a second arrives — now 2
+  requests give 123 tok/s total against 146 for one; drafting → plain is one-way (the draft layer dropped: y = a step
+  over `last`). Measure n=2 again; target ≥ one request's total.
 
 ## Done: the desktop panel (specs/desktop-panel.md)
 
