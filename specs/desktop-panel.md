@@ -89,3 +89,17 @@ sequences reads them once.
 **Measure:** the logits of `stepMany` against each row's `logits` (relative error), greedy tokens over 64 steps for
 3 prompts batched vs apart; then on the gateway: 1, 2, 4 concurrent requests on the 4B and the 35B — total and
 per-request tok/s, before and after (bench/history.tsv).
+
+## 5. Hot experts in place; the history of resources (2026-11-16)
+
+- **Hot experts changed in place** (the operator: no reload when memory changes): mlx-scala's `Model.reslot(n)`
+  makes or closes a mixture of experts' hot-expert caches between steps — the weights stay mapped, the prefix cache,
+  states and adapter kept. `Switching.fitMemory` puts Qwen3.6-35B on its hot experts under pressure and back on all of
+  them when memory is easy for ten minutes, in place (`on N hot experts a layer, in place (0.x s)` in the log); a
+  reload only for a model that cannot. Qwen35Suite: whole → 64 → 16 → 64 in one model, mlx_lm's tokens each time.
+- **Resources → History** (the operator: a historical chart of the gateway's and the model's use): the hub samples
+  every 5 seconds while the app runs, window open or not — the gateway process's CPU and memory footprint (its own,
+  without the model's), the model's MLX memory, swap, memory pressure, decode speed, the model and its hot experts —
+  into ~/Library/Application Support/okay-mlx/usage.tsv, a day kept. Swift Charts over 15 min / 1 h / 6 h / 24 h
+  (bucket averages, a peak for speed), memory-pressure bands, a rule where the model changed (a sample with no answer
+  from the gateway is unknown, not "unloaded").

@@ -13,7 +13,8 @@ cp Info.plist "$bundle/Contents/Info.plist"
 ditto Resources "$bundle/Contents/Resources"
 cp ../LICENSE "$bundle/Contents/Resources/LICENSE"
 xcrun swiftc -swift-version 6 -target arm64-apple-macosx14.0 -O \
-    Service.swift ModelCache.swift Installation.swift InstallView.swift Resources.swift Library.swift Admin.swift Catalog.swift \
+    Service.swift ModelCache.swift Installation.swift InstallView.swift Resources.swift History.swift HistoryView.swift \
+    Library.swift Admin.swift Catalog.swift \
     Clients.swift ModelsView.swift ClientsView.swift MenuView.swift OkayMLX.swift \
     -o "$bundle/Contents/MacOS/OkayMLX"
 codesign --force --sign - "$bundle"

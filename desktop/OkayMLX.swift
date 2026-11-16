@@ -28,6 +28,8 @@ final class Hub: ObservableObject {
     let panel = PanelModel()
     let installer = InstallModel()
     let library = LibraryModel()
+    // the gateway's and its model's use of the Mac, sampled while the app runs (the Resources tab charts it)
+    let history = UsageHistory()
     private var forwarding: [AnyCancellable] = []
 
     init() {
@@ -48,6 +50,7 @@ final class Hub: ObservableObject {
     func refresh(rescan: Bool = false) async {
         await panel.refresh()
         if let status = panel.status { await library.refresh(status, rescan: rescan) }
+        history.take(pid: panel.status?.pid, admin: library.admin)
     }
 
     /// The menu bar's symbol: generating, a model in memory, none, the service down.
@@ -141,7 +144,7 @@ struct ControlPanel: View {
                     await refreshAll()
                 }
                 case .clients: ClientsView(status: status, library: library)
-                case .resources: ResourcesView(pid: status.pid)
+                case .resources: ResourcesView(pid: status.pid, history: hub.history)
                 case .log: log(status)
                 }
             } else if model.refreshError == nil {

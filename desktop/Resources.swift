@@ -53,6 +53,7 @@ struct SystemUsage {
 
 struct ResourcesView: View {
     let pid: String?
+    @ObservedObject var history: UsageHistory
     @State private var process: ProcessUsage?
     @State private var cpu: Double?
     @State private var system = SystemUsage()
@@ -60,6 +61,10 @@ struct ResourcesView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 14) {
+                HistoryView(history: history)
+                    .padding(16)
+                    .background(card, in: RoundedRectangle(cornerRadius: 12))
+
                 VStack(alignment: .leading, spacing: 10) {
                     Text("okay-mlx process").font(.headline)
                     if let process {
