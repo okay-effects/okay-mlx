@@ -119,3 +119,6 @@ per-request tok/s, before and after (bench/history.tsv).
   Qwen3.5-4B); now the largest gap is ~0.6 s and the new request's first token no later (bench/stall.sh,
   bench/history.tsv). PrefillStepSuite: chunked = whole, greedy-exact; interleaved with another's decode, each its
   own.
+- **A pause gives MLX's buffers back** — a model loaded keeps up to `OKAY_MLX_CACHE_GB` (1 GB) of freed buffers for the
+  next request; after a minute with nothing generating they are given back (`MlxBackend.trim`, once a pause). Seen:
+  Qwen3.5-4B after a 6.5k-token request, 1.00 GB given back 83 s later. The model, its prefixes, stay.

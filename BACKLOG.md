@@ -29,8 +29,10 @@
      Measure: 2 and 4 concurrent Claude Code / opencode sessions, total and per-session tok/s.
   2. **A draft model for the dense 27B** (no MTP layer of its own): Qwen3.5-0.8B or 2B with the same tokenizer drafts,
      the 27B verifies in one pass — exact; measure the acceptance and tok/s on code and on prose.
-  3. **KV cache in 8 bits** for long agent contexts: half the memory, less paging; exactness checked against bf16
-     on the 35B's answers (greedy, 256 tokens).
+  3. **KV cache in 8 bits** — SIZED 2026-11-16, NOT NOW: the hybrid models keep KV in one layer of four only (bf16 a
+     token: 35B-A3B 20 KB, 4B 32 KB, 27B 64 KB) — 8 bits would save ~0.33 GB at 32k on the 35B (of 20 GB), ~1 GB on
+     the 27B; it needs attention over quantized K/V in okm and the prefix snapshots changed. Worth it for the 27B
+     at long contexts, or for many prefixes kept.
   4. **The first request after a restart** — CHECKED 2026-11-16: the system prompt's prefix is found in the disk store
      after a process restart (4B, 6.8k tokens: 90 ms against 6.5 s cold) — the idle restart costs no prefill.
   6. **Batched prefill across requests** — MEASURED 2026-11-16, NOT WORTH IT NOW: prefill is compute-bound at ~1050

@@ -68,6 +68,14 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
       case _ => System.err.println(s"[Warn] $name takes no adapters: ${a.mkString} not put on")
   }
 
+  /** MLX's freed buffers kept for reuse (up to OKAY_MLX_CACHE_GB) given back — the model and its prefixes kept: for
+   * a pause with nothing generating. The bytes given back */
+  def trim(): Long = mlx {
+    val kept = _root_.mlx.Mlx.cacheMemory
+    _root_.mlx.Mlx.clearCache()
+    kept
+  }
+
   /** the model and its prefixes freed, MLX's buffers given back: the memory free for another model */
   def close(): Unit = mlx {
     caches.values.foreach(_.clear())

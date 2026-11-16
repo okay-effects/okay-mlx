@@ -23,6 +23,8 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
   private var changed = System.nanoTime()
   private var warned = false
   @volatile private var used = System.nanoTime()
+  // MLX's buffers given back in this pause already (a request starts a new one)
+  @volatile private var trimmed = false
   @volatile private var lastTiming: Option[(Timing, Long)] = None
   @volatile private var snapshot: Switching.Loaded | Null = null
 
@@ -107,7 +109,7 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     val (w, a) = wanted(ask)
     ensure(w, a)
     if running.isEmpty then fitMemory()
-    used = System.nanoTime()
+    used = System.nanoTime(); trimmed = false
     val r = Running(name, Option(Switching.client.get).getOrElse("?"))
     running += r
     (current.nn, r)
@@ -119,7 +121,7 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     if !Models.cached().contains(m) then Left(s"$m is not in the HuggingFace cache")
     else if model.contains('+') && a.isEmpty then Left(s"no adapter ${model.drop(model.lastIndexOf('+') + 1)} for $m")
     else synchronized {
-      try { ensure(m, a, reload); used = System.nanoTime(); Right(name) }
+      try { ensure(m, a, reload); used = System.nanoTime(); trimmed = false; Right(name) }
       catch case e: Exception => Left(s"$m did not load: ${e.getMessage}")
     }
 
@@ -147,6 +149,16 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
           r.abandon()
         }
         notifyAll()
+      }
+      // a pause: nothing generating for a minute — MLX's buffers kept for reuse given back (a model loaded keeps
+      // up to OKAY_MLX_CACHE_GB of them between requests); once a pause
+      synchronized {
+        if running.isEmpty && !switching && current != null && !trimmed &&
+            System.nanoTime() - used > Switching.pause then
+          trimmed = true
+          val freed = current.nn.trim()
+          if freed > (64L << 20) then
+            System.err.println(f"[Info] a pause: ${freed / 1e9}%.2f GB of MLX's buffers given back")
       }
       val after = Settings.unloadAfter
       if after > 0 && current != null && System.nanoTime() - used > after * 60L * 1000 * 1000 * 1000 then
@@ -227,7 +239,7 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     @volatile var generation: Llm.Generation | Null = null
     def release(): Unit = Switching.this.synchronized {
       running -= this
-      used = System.nanoTime()
+      used = System.nanoTime(); trimmed = false
       Switching.this.notifyAll() }
     def abandon(): Unit =
       val g = generation
@@ -267,6 +279,8 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
 object Switching:
   /** a generation with no token asked for this long: its client gone */
   val abandoned: Long = 60L * 1000 * 1000 * 1000
+  /** nothing generating for this long: a pause, MLX's buffers kept for reuse given back */
+  val pause: Long = 60L * 1000 * 1000 * 1000
 
   /** THE IDLE RESTART: whether this process gives its memory back by exiting after an idle unload — when launchd
    * runs it as the service (it starts it again at once: KeepAlive), or OKAY_MLX_RECYCLE=1; OKAY_MLX_RECYCLE=0 never */
