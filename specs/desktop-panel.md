@@ -103,3 +103,19 @@ per-request tok/s, before and after (bench/history.tsv).
   into ~/Library/Application Support/okay-mlx/usage.tsv, a day kept. Swift Charts over 15 min / 1 h / 6 h / 24 h
   (bucket averages, a peak for speed), memory-pressure bands, a rule where the model changed (a sample with no answer
   from the gateway is unknown, not "unloaded").
+
+## 6. Idle holds nothing; a long prompt stops no one (2026-11-16, the operator)
+
+- **The heap given back** — Scala Native's GC (Immix) never returns its heap, and keeps it ≥ 4× the live data at its
+  peak (`Heap_shouldGrow`): a model's load left 1.1 GB with no model. Halved at the source (mlx-scala
+  `Tokenizer.fromFile`: tokenizer.json scanned into its tables, no JSON tree — 546 MB). The rest: after an idle
+  unload (`unload_after_minutes`) the service process exits and launchd starts it afresh (~8 MB), with no model
+  (`~/.cache/okay-mlx/idle-restart` names the one unloaded: the next request naming none loads it). Only under
+  launchd (`XPC_SERVICE_NAME`), or `OKAY_MLX_RECYCLE=1`; `=0` never. Checked: 1111 MB → exit after 90 s with 1 min
+  set → restarted at 8.3 MB, no model, the mark consumed.
+- **The prompt in chunks** (mlx-scala `Session.prefillStep`): a request's prompt is read one chunk per MLX-thread task
+  — 2048 tokens alone, 512 (`OKAY_MLX_SHARED_CHUNK`) while other requests are going — so their tokens come between the
+  chunks. Before, a request reading a new 9k-token prompt stopped every other request for its whole prefill (12.5 s on
+  Qwen3.5-4B); now the largest gap is ~0.6 s and the new request's first token no later (bench/stall.sh,
+  bench/history.tsv). PrefillStepSuite: chunked = whole, greedy-exact; interleaved with another's decode, each its
+  own.

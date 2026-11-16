@@ -13,3 +13,5 @@ date	okay-mlx	mlx-scala	host_load	workload	mine	ref	ratio	note
 2026-11-15	f02e843	b610544	-	Qwen3.5-4B 4 concurrent requests (tok/s total)	251.1	73.2	3.43	1 request 142.2
 2026-11-15	f02e843	b610544	-	Qwen3.6-35B-A3B 2 concurrent requests (tok/s total)	161.9	101.0	1.60	whole; 1 request 144.5
 2026-11-15	f02e843	b610544	-	Qwen3.6-35B-A3B 4 concurrent requests (tok/s total)	220.4	99.9	2.21	
+2026-11-16	74fede5+prefill-steps	008222a+prefillStep	2.17	Qwen3.5-4B: A streaming while B reads a new ~9k-token prompt — A's largest gap (ms)	596	12519	21.0	before: B's whole prefill in one MLX task, A stopped 12.5-14.4 s; after: 2048/512-token chunks as tasks, A between them; bench script stall.sh (2 runs each; first new run discarded: A ended before B)
+2026-11-16	74fede5+prefill-steps	008222a+prefillStep	2.17	Qwen3.5-4B: B's time to its first token in the same run (ms)	11832	12585	1.06	no worse: the chunks interleave, the prefill keeps its pace

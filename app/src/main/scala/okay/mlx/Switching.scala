@@ -26,10 +26,17 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
   @volatile private var lastTiming: Option[(Timing, Long)] = None
   @volatile private var snapshot: Switching.Loaded | Null = null
 
-  // the first model: a model not there (deleted since) leaves the gateway up with none loaded
-  current = try load(first) catch case e: Exception =>
-    System.err.println(s"[Warn] $first did not load: ${e.getMessage}")
-    null
+  // the first model: a model not there (deleted since) leaves the gateway up with none loaded; none after an idle
+  // restart (the process started afresh to give its memory back: the next request loads the model it names)
+  current = Switching.afterIdle() match
+    case Some(model) =>
+      last = (model, None)
+      System.err.println(s"[Info] started afresh after an idle unload: no model loaded ($model next, if none is named)")
+      null
+    case None =>
+      try load(first) catch case e: Exception =>
+        System.err.println(s"[Warn] $first did not load: ${e.getMessage}")
+        null
 
   private def load(repo: String, hot: Option[Int] = None): MlxBackend =
     val dir = Models.snapshot(repo).getOrElse(sys.error(s"$repo is not in the HuggingFace cache"))
@@ -146,7 +153,15 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
         synchronized {
           if running.isEmpty && !switching && current != null then
             System.err.println(s"[Info] nothing asked for $after min: the model unloaded")
+            val model = current.nn.name
             free()
+            // the heap given back too: Scala Native's GC never returns it (a model's load leaves ~0.5 GB), so the
+            // service process exits and launchd starts it afresh (~10 MB), with no model — only under launchd
+            if Switching.recycles then
+              Switching.markIdle(model)
+              System.err.println("[Info] restarting afresh to give the memory back")
+              System.err.flush()
+              System.exit(0)
         }
   , "okay-mlx-idle")
   idle.setDaemon(true)
@@ -252,6 +267,32 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
 object Switching:
   /** a generation with no token asked for this long: its client gone */
   val abandoned: Long = 60L * 1000 * 1000 * 1000
+
+  /** THE IDLE RESTART: whether this process gives its memory back by exiting after an idle unload — when launchd
+   * runs it as the service (it starts it again at once: KeepAlive), or OKAY_MLX_RECYCLE=1; OKAY_MLX_RECYCLE=0 never */
+  def recycles: Boolean = sys.env.get("OKAY_MLX_RECYCLE") match
+    case Some(v) => v == "1"
+    case None => sys.env.get("XPC_SERVICE_NAME").contains("io.github.okay-effects.okay-mlx")
+
+  private def idleFile: java.nio.file.Path =
+    java.nio.file.Path.of(sys.props("user.home"), ".cache", "okay-mlx", "idle-restart")
+
+  /** the model unloaded for idleness, written before the exit: the next start loads none */
+  def markIdle(model: String): Unit =
+    try
+      java.nio.file.Files.createDirectories(idleFile.getParent)
+      java.nio.file.Files.writeString(idleFile, model)
+    catch case _: Exception => ()
+
+  /** the model of an idle restart, if this start is one (the mark read and removed: one start only) */
+  def afterIdle(): Option[String] =
+    try
+      if !java.nio.file.Files.exists(idleFile) then None
+      else
+        val m = java.nio.file.Files.readString(idleFile).trim
+        java.nio.file.Files.delete(idleFile)
+        Some(m).filter(_.nonEmpty)
+    catch case _: Exception => None
 
   /** the model in memory: its name, adapter, weights' bytes, whether a mixture of experts and its hot experts a
    * layer (0: whole), when it loaded (ms since the epoch) */

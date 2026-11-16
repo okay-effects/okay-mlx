@@ -98,11 +98,18 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
       drafts = if alone then drafts else 0, batch = batch)
     private val stream = chat.tokenizer.Stream()
     private val sb = new StringBuilder
-    def next(): Option[String] = mlx(session.next().map { t =>
-      val piece = stream.push(t)
-      sb.append(piece)
-      piece
-    })
+    // THE PROMPT IN CHUNKS, each its own task on the MLX thread: other requests' tokens run between them (a long
+    // prompt no longer stops every other request until it is all read) — smaller chunks while others are going
+    private var prefilled = false
+    def next(): Option[String] =
+      if !prefilled then
+        while mlx(session.prefillStep(if live > 1 then MlxBackend.sharedChunk else Session.chunk)) do ()
+        prefilled = true
+      mlx(session.next().map { t =>
+        val piece = stream.push(t)
+        sb.append(piece)
+        piece
+      })
     def text: String = sb.toString
     def timing: Timing =
       val t = session.timing
@@ -121,6 +128,9 @@ final class MlxBackend private (val name: String, model: Model, chat: Chat, defa
     })
 
 object MlxBackend:
+  /** a prompt's chunk while other requests are going: about a third of a second of prefill on Qwen3.6-35B */
+  val sharedChunk: Int = sys.env.get("OKAY_MLX_SHARED_CHUNK").flatMap(_.toIntOption).getOrElse(512)
+
   /** MLX's memory after a request: what its arrays hold, what it keeps for reuse, the most it held */
   def memory(): Unit =
     val m = _root_.mlx.Mlx
