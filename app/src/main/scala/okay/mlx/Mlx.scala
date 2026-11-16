@@ -13,10 +13,26 @@ import mlx.llm.{Adaptable, Batch, Chat, Lora, Model, PrefixCache, PrefixStore, Q
  * requests served at once take turns on it a token at a time. Tokens drawn as a request says, else as the model's
  * generation_config.json does */
 final class MlxBackend private (val name: String, model: Model, chat: Chat, defaults: Sampling, cache: PrefixCache,
-    mlx: MlxBackend.OnThread, guesses: Int, drafts: Int, val slots: Int, val mixture: Boolean, val bytes: Long)
-    extends Llm.Backend:
+    mlx: MlxBackend.OnThread, guessesSet: Int, draftsSet: Int, slotsAtLoad: Int, val mixture: Boolean,
+    val bytes: Long) extends Llm.Backend:
+  // THE HOT EXPERTS NOW (0: all of them): changed in place by `reslot`, no reload — guesses and drafts off on them (a
+  // pass of seven tokens wants up to 56 experts a layer, mostly not there)
+  @volatile private var slotsNow = slotsAtLoad
+  def slots: Int = slotsNow
+  private def guesses = if slotsNow > 0 then 0 else guessesSet
+  private def drafts = if slotsNow > 0 then 0 else draftsSet
   // whether the model drafts its own (it has a draft layer, and drafts are wanted)
-  private val drafting = drafts > 0 && { val d = model.newDraft(); if d != null then d.close(); d != null }
+  private val canDraft = draftsSet > 0 && { val d = model.newDraft(); if d != null then d.close(); d != null }
+  private def drafting = canDraft && slotsNow == 0
+
+  /** its hot experts changed in place (mlx-scala's `Model.reslot`): `n` a layer, 0 all of them — the weights, the
+   * prefix cache, the adapter kept; no generation may be running (the caller waits for them). False: the model
+   * cannot (not a mixture, or not mapped) — the caller reloads instead */
+  def reslot(n: Int): Boolean = mlx {
+    val ok = model.reslot(n)
+    if ok then slotsNow = model.expertSlots
+    ok
+  }
   private def prompt(ask: Ask): Array[Int] =
     MlxBackend.dump(chat, ask)
     chat.prompt(ask.messages, ask.tools, MlxBackend.kwargs(ask))
@@ -147,9 +163,8 @@ object MlxBackend:
       val prefixes = Memory.gigabytes("OKAY_MLX_PREFIX_GB", if store == null then 4.0 else 1.5)
       val sampling = Settings.of(name, Sampling.of(dir))
       System.err.println(s"[Info] $name samples as $sampling")
-      // no guesses on hot experts: a pass of seven tokens wants up to 56 experts a layer, mostly not there
       MlxBackend(name, model, Chat.load(dir), sampling, PrefixCache(prefixes, store), mlx,
-        if slots > 0 then 0 else Settings.guesses(name), if slots > 0 then 0 else Settings.drafts(name), slots, mixture,
+        Settings.guesses(name), Settings.drafts(name), slots, mixture,
         Memory.bytes(dir))
     }
 

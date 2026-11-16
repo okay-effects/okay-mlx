@@ -163,9 +163,10 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
       if loading.nonEmpty || switching then -1L else mlx(_root_.mlx.Mlx.activeMemory),
       (System.nanoTime() - used) / 1000000000L, t)
 
-  /** MEMORY AS IT IS NOW, before a request: a mixture of experts whole under pressure reloaded with its hot experts
-   * alone; hot, and memory easy again for ten minutes, whole again — unless the owner set its hot experts. A dense
-   * model under pressure: a warning (nothing to keep apart) */
+  /** MEMORY AS IT IS NOW, before a request: a mixture of experts whole under pressure put on its hot experts alone;
+   * hot, and memory easy again for ten minutes, whole again — IN PLACE (mlx-scala's reslot: no reload, the prefixes
+   * kept), a reload only for a model that cannot — unless the owner set its hot experts. A dense model under
+   * pressure: a warning (nothing to keep apart) */
   private def fitMemory(): Unit =
     val c = current.nn
     val p = Memory.pressure
@@ -180,13 +181,24 @@ final class Switching(first: String, mlx: MlxBackend.OnThread = MlxBackend.OnThr
     else if Settings.expertSlotsSet(c.name).isEmpty then
       val want = Memory.slotsWanted(c.slots, c.bytes, room, p, System.nanoTime() - changed)
       if want != c.slots then
-        System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${c.bytes / 1e9}%.1f, pressure $p: " +
-          s"${c.name} " + (if want > 0 then s"reloaded with $want hot experts a layer" else "reloaded whole"))
-        val (name, a) = (c.name, c.adapter)
-        free()
-        current = load(name, Some(want))
-        current.nn.use(a)
-        snapshot = snapshot.nn.copy(adapter = a)
+        // in place when the model can (mlx-scala's reslot: the weights stay mapped, the prefixes and the adapter
+        // hold — seconds, not a reload of 20 GB and the cache lost); else reloaded
+        val t = System.nanoTime()
+        if c.reslot(want) then
+          changed = System.nanoTime()
+          snapshot = snapshot.nn.copy(slots = c.slots)
+          System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${c.bytes / 1e9}%.1f, pressure $p: " +
+            s"${c.name} " + (if want > 0 then s"on $want hot experts a layer" else "on all its experts") +
+            f", in place (${(System.nanoTime() - t) / 1e9}%.1f s): MLX holds " +
+            f"${mlx(_root_.mlx.Mlx.activeMemory) / 1e9}%.1f GB")
+        else
+          System.err.println(f"[Warn] memory: room ${room / 1e9}%.1f GB for ${c.bytes / 1e9}%.1f, pressure $p: " +
+            s"${c.name} " + (if want > 0 then s"reloaded with $want hot experts a layer" else "reloaded whole"))
+          val (name, a) = (c.name, c.adapter)
+          free()
+          current = load(name, Some(want))
+          current.nn.use(a)
+          snapshot = snapshot.nn.copy(adapter = a)
 
   /** a generation going on: its model and client, its prompt (and how much a cache gave), its tokens so far */
   private final class Running(val model: String, val client: String):
