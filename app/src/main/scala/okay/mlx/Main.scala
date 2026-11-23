@@ -39,6 +39,12 @@ import mlx.llm.Models
       Server.run(rest.headOption.map(_.toInt).getOrElse(8090)) { (req, out) =>
         // the gateway managed (Admin): the model loaded, unloaded, the state read
         if Admin.handles(req) then run(Http.socket(out)(Admin.route[Http](req, switching)))
+        // MCP (Events): an agent, okay-loop, the desktop app sleep on the gateway's changes
+        else if Mcp.handles(req) then
+          type Ev[X] = (Events.Gauge + Clock + Http)[X]
+          try run(Http.socket(out)(Clock.system(Events.Gauge.of(switching)(
+            Mcp.route[Ev](req, () => Admin.status(switching))))))
+          catch case _: java.io.IOException => () // the client went away: its stream ends
         else
           // the client this thread serves, for /admin/status's generations
           Switching.client.set(Admin.clientOf(req))

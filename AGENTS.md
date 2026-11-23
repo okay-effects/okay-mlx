@@ -26,5 +26,8 @@ Build: `sbt test` (the backend on Qwen3-4B, skipped without it), `sbt "appNative
   `POST /admin/unload {"force"}`. `Switching` can hold no model (the next request loads the one it names, else the
   last); a startup model that does not load leaves the gateway up. `Settings`: `"hidden": true` by model (not in
   /v1/models), `"*": {"unload_after_minutes": N}` (OKAY_MLX_UNLOAD_AFTER) — unloaded by itself when idle.
+- `/mcp` (2026-11-23, `Events`): an MCP endpoint with the draft extension `io.modelcontextprotocol/events` — a `status`
+  tool and push streams of `model.loaded`/`model.unloaded`, `memory.room {min_gb}`, `gpu.starved`/`gpu.freed`,
+  `generation.done`; opencode ≥ 2.3 (`experimental.mcp_events`) sleeps on them; the machine an effect (`Gauge`).
 - The desktop app (`desktop/`, SwiftUI, `desktop/build.sh`) manages models over these and the files: the HF cache,
   `~/.config/okay-mlx/models.json`, the LaunchAgent's MLX_MODEL, and opencode's provider (OpenChamber).
