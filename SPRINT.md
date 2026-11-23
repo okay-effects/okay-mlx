@@ -65,3 +65,11 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   OUTCOME 2026-11-14: v0.1.1 assets replaced (server 7d8f6bef…, app e2c8774c…, SHA256SUMS both), tag moved
   3c4bb2a → aeb546e. Gotcha: build with MLX_C_SOURCE=~/work/my/mlx-scala/native-lib/src — the cached CMake build in
   target/macos14 was made from it; the default (a fresh clone in target/macos14/src) fails "source does not match".
+- [ ] **events** (operator 2026-11-23) — the gateway as an MCP server of the draft extension `io.modelcontextprotocol/
+  events` (see rozum SPRINT "MCP Events", its spike first): `/mcp` on the same port with a `status` tool and event
+  types `model.loaded`, `model.unloaded`, `memory.room` (arguments `min_gb`: fires when the machine's room for MLX
+  reaches it), `gpu.starved` / `gpu.freed` (a generation with no token for 3 min, and its end), `generation.done`;
+  poll + push, cursor = an event counter since start (no replay across restarts: `cursor: null` after one). Who
+  consumes: opencode sessions (`opencode_watch_mcp_event`: an agent waits for room instead of polling), okay-loop's
+  `--wait-room` (now polls /admin/status each minute), the desktop app. Done when: an opencode session wakes on
+  `memory.room`, and okay-loop's wait watches the event.
