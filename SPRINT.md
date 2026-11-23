@@ -76,3 +76,24 @@ Queue, in order (the owner, 2026-11-14: "делай всё по порядку")
   consumes: opencode sessions (`opencode_watch_mcp_event`: an agent waits for room instead of polling), okay-loop's
   `--wait-room` (now polls /admin/status each minute), the desktop app. Done when: an opencode session wakes on
   `memory.room`, and okay-loop's wait watches the event.
+
+## Hot experts' limits (2026-11-24, the owner: "запиши всё в спринт и начинай")
+
+A mixture of experts on hot experts (mlx-scala `ExpertCache`, 64 a layer: 45 tok/s against 119 whole) has two limits,
+and the machine's memory a third. In order (the work is in mlx-scala; okay-mlx turns it on):
+
+- [ ] **guesses / MTP with hot experts** (mlx-scala BACKLOG "MTP with hot experts") — the wait for the router's picks
+  is per layer per pass, so a pass checking k tokens pays it once for k: the ~70 tok/s bound of a CPU-steered cache
+  over k. The union of k + 1 tokens' picks wants more slots. Check: Qwen3.6-35B, 64 and 128 a layer, guesses 0 / 2 /
+  4 / 6 — tok/s, hits, the same greedy tokens; okay-mlx stops turning guesses off on hot experts if it pays.
+- [ ] **a prompt streamed by layer on hot experts** — now a prefill runs on the mapped file and Metal brings whole
+  expert tensors in, out of order (500 new tokens on 2.7k cached: 8.5 s hot, 0.4 s whole). Instead, each layer: the
+  router for all the prompt's tokens, the experts they pick passed through the slots in batches, the next batch read
+  on a thread while the GPU computes — each expert read once, in order. Check: that case's seconds, the same tokens
+  as the model whole.
+- [ ] **one big job at a time** — the swap of 2026-11-17 was the teacher (35B) beside another session's MLX job, not
+  the model: a memory lock (okay-mlx's events: `memory room ≥ min_gb`) that big jobs take and wait on. Check: two
+  jobs started together, one waits, no swap growth.
+- [ ] **a missing expert skipped** (an approximation, LAST and only measured) — no wait at all: a pick not in the
+  slots left out and the rest's weights renormalized. Only after its quality is measured against the whole model on
+  the teacher's tasks; never where exactness is the point.
